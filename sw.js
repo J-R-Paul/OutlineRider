@@ -1,68 +1,85 @@
-// sw.js - Basic Service Worker for PWA installation
+// sw.js
 
 const CACHE_NAME = 'bike-editor-pro-cache-v1';
-const URLS_TO_CACHE = [
-  '/', // Cache the root HTML
+const urlsToCache = [
+  '.', // Alias for index.html
   'index.html',
   'style.css',
   'script.js',
+  'worker.js',
   'manifest.json',
-  'icons/icon-192.png',
-  'icons/icon-512.png'
-  // Add other essential assets if needed
+   // Add paths to your icons here if you have them
+   'icon-192.png',
+   'icon-512.png',
+   // Optional: Add a basic offline fallback page
+   // 'offline.html'
 ];
 
 // Install event: Cache core assets
 self.addEventListener('install', event => {
-  console.log('SW: Install event');
+  console.log('[SW] Install event');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('SW: Caching app shell');
-        return cache.addAll(URLS_TO_CACHE);
-      })
-      .then(() => self.skipWaiting()) // Activate worker immediately
-      .catch(error => {
-        console.error('SW: Failed to cache app shell:', error);
+        console.log('[SW] Opened cache:', CACHE_NAME);
+        return cache.addAll(urlsToCache).catch(error => {
+            console.error('[SW] Failed to cache URLs:', error, urlsToCache);
+        });
       })
   );
 });
 
 // Activate event: Clean up old caches
 self.addEventListener('activate', event => {
-  console.log('SW: Activate event');
+  console.log('[SW] Activate event');
+  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('SW: Deleting old cache:', cacheName);
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim()) // Take control of open clients immediately
+    })
   );
 });
 
-// Fetch event: Serve cached assets first (Cache-First strategy)
+// Fetch event: Serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  // console.log('SW: Fetch event for', event.request.url);
-  // Use a cache-first strategy for app shell assets
+  // console.log('[SW] Fetch event for:', event.request.url);
   event.respondWith(
     caches.match(event.request)
       .then(response => {
+        // Cache hit - return response
         if (response) {
-          // console.log('SW: Serving from cache:', event.request.url);
-          return response; // Serve from cache
+          // console.log('[SW] Serving from cache:', event.request.url);
+          return response;
         }
-        // console.log('SW: Fetching from network:', event.request.url);
-        return fetch(event.request); // Fetch from network if not in cache
+
+        // Not in cache - fetch from network
+        // console.log('[SW] Fetching from network:', event.request.url);
+        return fetch(event.request).then(
+          (networkResponse) => {
+            // Optional: Cache the new resource dynamically (be careful with this)
+            /* if(!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              return networkResponse;
+            }
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            */
+            return networkResponse;
+          }
+        ).catch(error => {
+           console.warn('[SW] Fetch failed; returning offline page if available.', error);
+           // Optional: Return offline fallback page
+           // return caches.match('offline.html');
+        });
       })
-      .catch(error => {
-         // Optional: Fallback page for offline?
-         console.error('SW: Fetch failed:', error);
-         // For now, just let the browser handle the fetch failure
-      })
-  );
+    );
 });

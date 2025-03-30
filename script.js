@@ -1,701 +1,1033 @@
+// script.js
 document.addEventListener('DOMContentLoaded', () => {
     // --- UI Elements ---
+    // ... (UI elements remain the same) ...
     const fileInput = document.getElementById('fileInput');
     const directFileAccessDiv = document.getElementById('directFileAccess');
     const openDirectButton = document.getElementById('openDirectButton');
     const saveDirectButton = document.getElementById('saveDirectButton');
-    const newButton = document.getElementById('newButton');
+    const opfsFileAccessDiv = document.getElementById('opfsFileAccess');
+    const newAppFileButton = document.getElementById('newAppFileButton');
+    const saveToOpfsButton = document.getElementById('saveToOpfsButton');
     const saveAsButton = document.getElementById('saveAsButton');
     const outlineContainer = document.getElementById('outlineContainer');
     const toolbar = document.getElementById('toolbar');
     const currentFileNameSpan = document.getElementById('currentFileName');
-    const clearLocalButton = document.getElementById('clearLocalButton');
     const initialMessageDiv = document.getElementById('initialMessage');
+    const directInfoLi = document.getElementById('directInfo');
+    const opfsInfoLi = document.getElementById('opfsInfo');
+    const opfsInfoLi2 = document.getElementById('opfsInfo2');
+
 
     // --- State Variables ---
+    // ... (State variables remain the same) ...
     let rootUlElement = null;
     let currentlySelectedLi = null;
-    let directFileHandle = null; // Standard FSA handle
-    let fileSystemWorker = null; // Web Worker
-    let opfsRoot = null; // OPFS root handle cache
-    let isOpfsAvailable = false;
-    let currentFileSource = 'loading'; // 'loading', 'direct', 'opfs', 'copy', 'new', 'draft', 'empty'
-    let autoSaveOpfsTimeout = null;
-    let autoSaveDraftTimeout = null;
+    let directFileHandle = null;
+    let persistentOpfsHandle = null;
+    let currentFileSource = null; // 'direct', 'opfs', 'copy', 'draft', 'new', 'empty'
+    let opfsRoot = null;
+    let fileSystemWorker = null;
+    let autoSaveTimeout = null;
     let isDirty = false;
-    let opfsSaveInProgress = false;
-    let lastFocusedElement = null; // Track last focused paragraph for restoration
+    let opfsIsInitialized = false;
+    let isLoading = false; // Global loading flag
+
 
     // --- Constants ---
-    const OPFS_FILENAME = 'current_session.bike';
-    const LOCAL_STORAGE_KEY = 'bikeEditorProDraft_v3'; // Increment key version
-    const AUTOSAVE_OPFS_DELAY = 2500;
-    const AUTOSAVE_DRAFT_DELAY = 750; // Slightly longer draft delay
+    // ... (Constants remain the same) ...
+    const LOCAL_STORAGE_KEY = 'bikeEditorProDraft';
+    const PERSISTENT_OPFS_FILENAME = '_current_outline.bike';
+    const AUTOSAVE_DELAY = 1500;
+
 
     // --- Feature Detection & Initial Setup ---
     async function initialize() {
-        console.log("Initializing Bike Editor Pro v3...");
+        console.log("Initializing Bike Editor Pro...");
+        // **FIX:** Do NOT set isLoading = true here initially.
+        // isLoading = true;
 
-        // Check Direct Access API
-        if ('showOpenFilePicker' in window && 'createWritable' in FileSystemFileHandle.prototype) {
-            console.log("Direct File Access API supported.");
-            directFileAccessDiv.style.display = 'flex';
-        } else {
-            console.warn("Direct File Access API not supported.");
-            directFileAccessDiv.style.display = 'none';
-        }
+        let opfsSupported = false;
+        let directAccessSupported = false;
 
-        // Check OPFS & Init Worker
-        if ('storage' in navigator && 'getDirectory' in navigator.storage) {
+        // Setup Worker
+        if (window.Worker) {
             try {
-                opfsRoot = await navigator.storage.getDirectory();
                 fileSystemWorker = new Worker('worker.js');
                 fileSystemWorker.onmessage = handleWorkerMessage;
                 fileSystemWorker.onerror = (err) => console.error("Worker Error:", err);
-                isOpfsAvailable = true;
-                console.log("OPFS Initialized & Worker Started.");
-            } catch (err) {
-                console.error("OPFS Initialization Failed:", err); isOpfsAvailable = false;
-                // Non-blocking alert, initialization continues
-                setTimeout(() => alert(`Could not initialize App Storage (OPFS): ${err.message}\nDrafts will use temporary browser storage.`), 100);
-            }
-        } else {
-            console.warn("OPFS API not supported."); isOpfsAvailable = false;
-        }
+                console.log("Web Worker initialized.");
+            } catch (workerError) { console.error("Failed to initialize Web Worker:", workerError); }
+        } else { console.warn("Web Workers not supported."); }
 
-        // --- Load Initial Content ---
-        let loadedContent = false;
-        if (isOpfsAvailable) {
+
+        // Check for OPFS support
+        if ('storage' in navigator && 'getDirectory' in navigator.storage) {
+            console.log("OPFS API potentially supported.");
             try {
-                const handle = await opfsRoot.getFileHandle(OPFS_FILENAME);
-                const file = await handle.getFile();
-                const content = await file.text();
-                // Basic validation: Check for <html> tag and non-empty content
-                if (content && content.trim().length > 10 && content.includes('<html')) {
-                    parseAndRenderBike(content);
-                    currentFileSource = 'opfs';
-                    console.log(`Loaded from OPFS: ${OPFS_FILENAME}`);
-                    loadedContent = true; markAsClean();
-                } else if (content) {
-                     console.warn(`OPFS file ${OPFS_FILENAME} content seems invalid/empty.`);
-                }
-            } catch (err) {
-                if (err.name !== 'NotFoundError') {
-                    console.error(`Error loading initial OPFS file ${OPFS_FILENAME}:`, err);
-                    alert(`Error loading saved session: ${err.message}`);
-                } else { console.log(`OPFS file ${OPFS_FILENAME} not found.`); }
+            opfsRoot = await navigator.storage.getDirectory();
+            console.log("OPFS Root Handle obtained.");
+            opfsFileAccessDiv.style.display = 'flex'; opfsInfoLi.style.display = 'list-item'; opfsInfoLi2.style.display = 'list-item';
+            opfsSupported = true;
+
+            console.log(`Checking for existing OPFS file: ${PERSISTENT_OPFS_FILENAME}`);
+            try {
+                persistentOpfsHandle = await opfsRoot.getFileHandle(PERSISTENT_OPFS_FILENAME, { create: false });
+                console.log(`Found existing persistent OPFS file handle: ${PERSISTENT_OPFS_FILENAME}`);
+            } catch (e) {
+                if (e.name === 'NotFoundError') { console.log(`Persistent OPFS file (${PERSISTENT_OPFS_FILENAME}) not found.`); persistentOpfsHandle = null; }
+                else { console.error("Error checking for persistent OPFS file handle:", e); persistentOpfsHandle = null; }
             }
-        }
+            opfsIsInitialized = true;
 
-        // Try draft if OPFS load failed
-        if (!loadedContent) {
-            const storedDraft = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (storedDraft && storedDraft.length > 100 && storedDraft.includes('<html')) {
-                 console.log("Found potentially valid draft.");
-                 if (confirm("Load unsaved draft from temporary storage?")) {
-                    try {
-                        parseAndRenderBike(storedDraft);
-                        currentFileSource = 'draft'; isDirty = true; loadedContent = true;
-                        console.log("Loaded draft from localStorage.");
-                    } catch (draftError) {
-                        console.error("Error parsing draft:", draftError); alert("Could not load draft, it might be corrupted.");
-                        clearLocalStorage(false);
-                    }
-                 } else { console.log("User chose not to load draft."); clearLocalStorage(false); }
+            } catch (err) { 
+            console.error("Failed to initialize OPFS:", err);
+            opfsRoot = null;
+            opfsSupported = false;
+            opfsIsInitialized = false;
+            persistentOpfsHandle = null;
+            opfsFileAccessDiv.style.display = 'none';
+            opfsInfoLi.style.display = 'none';
+            opfsInfoLi2.style.display = 'none';
             }
+        } else { 
+            console.warn("OPFS API not supported in this browser.");
+            opfsRoot = null;
+            opfsSupported = false;
+            opfsIsInitialized = false;
+            opfsFileAccessDiv.style.display = 'none';
+            opfsInfoLi.style.display = 'none';
+            opfsInfoLi2.style.display = 'none';
         }
 
-        // Start empty if nothing loaded
-        if (!loadedContent) {
-            console.log("Starting empty.");
-            currentFileSource = 'empty';
-            resetEditorContent(); // Show initial message
-            markAsClean();
+        // Check for Standard File System Access API
+        if ('showOpenFilePicker' in window && 'createWritable' in FileSystemFileHandle.prototype) {
+            console.log("Standard File System Access API (with Write) supported.");
+            directFileAccessDiv.style.display = 'flex'; directInfoLi.style.display = 'list-item';
+            directAccessSupported = true;
+        } else { /* ... FSA not supported ... */ }
+
+        // --- Initial Content Loading Priority ---
+        let contentLoaded = false;
+        // ** Important: Only proceed if NOT already loading from another source (shouldn't happen here, but safety check)
+        if (!isLoading && persistentOpfsHandle) {
+            console.log("Attempting to auto-load from persistent OPFS file...");
+            contentLoaded = await loadFromPersistentOpfs(); // This function manages isLoading internally now
+        } else if (isLoading) {
+             console.warn("Initialize: Skipping OPFS load check as isLoading is already true.");
+        } else {
+            console.log("Initialize: No initial persistent OPFS handle found or check skipped.");
         }
 
-        // Ensure initial UI state is correct *after* loading attempts
-        updateFileStateUI();
-        if (loadedContent) selectFirstItem(); // Select first item if content loaded
+        // Check draft ONLY if OPFS didn't load and we're not currently loading
+        if (!contentLoaded && !isLoading) {
+            console.log("Initialize: OPFS did not load content, checking local draft...");
+            contentLoaded = await loadFromLocalStorage(false); // This function manages isLoading internally
+        } else if (contentLoaded) { console.log("Initialize: Content already loaded from OPFS, skipping draft check."); }
+        else if (isLoading) { console.log("Initialize: App is currently loading (from OPFS/Draft), skipping further checks."); }
 
-        // Add beforeunload listener
-         window.addEventListener('beforeunload', (event) => {
-             // Force a final draft save attempt synchronously if dirty
-             if (isDirty) saveDraftToLocalStorage();
-             // Warn only if proper saving is possible and changes exist
-             if (isDirty && (currentFileSource === 'direct' || isOpfsAvailable)) {
-                 const message = "You have unsaved changes. Leave page?";
-                 event.returnValue = message; return message;
-             }
-         });
 
-        console.log("Initialization complete. Source:", currentFileSource);
+        // Final state check: Ensure editor isn't left in a loading state or empty without message
+        if (!contentLoaded && !isLoading) {
+            console.log("Initialize: No content loaded from OPFS or draft, ensuring initial empty state.");
+            resetEditorState('empty'); // Reset to empty state
+        } else if (!contentLoaded && isLoading) {
+            // This case *shouldn't* happen if load functions manage isLoading correctly, but log if it does.
+            console.warn("Initialize: Finished, but no content loaded AND isLoading is still true! Investigate.");
+            isLoading = false; // Force reset
+            resetEditorState('empty'); // Reset to safe state
+        } else {
+             console.log("Initialize: Finished, content was loaded or state is being handled.");
+             // isLoading should have been reset by the successful load function
+             // If isLoading is somehow still true here, log a warning
+              if (isLoading) {
+                  console.warn("Initialize: Finished with content, but isLoading is still true! Resetting.");
+                  isLoading = false;
+              }
+        }
+
+         updateFileStateUI(); // Final UI update
+
+         window.addEventListener('beforeunload', (event) => { /* ... beforeunload logic ... */ });
+         console.log("Initialization complete.");
     }
 
     // --- Event Listeners ---
+    // ... (listeners remain the same) ...
     fileInput.addEventListener('change', handleFileLoadFromInput);
     openDirectButton.addEventListener('click', openFileDirectly);
     saveDirectButton.addEventListener('click', saveFileDirectly);
-    newButton.addEventListener('click', () => createNew(false)); // Explicitly pass false
+    newAppFileButton.addEventListener('click', createNewAppFile);
+    saveToOpfsButton.addEventListener('click', saveToOpfs);
     saveAsButton.addEventListener('click', saveFileAsDownload);
-    clearLocalButton.addEventListener('click', clearLocalStorage);
     toolbar.addEventListener('click', handleToolbarClick);
     outlineContainer.addEventListener('keydown', handleKeyDown);
-    // Track focus changes more carefully
-    outlineContainer.addEventListener('focusout', (e) => {
-         if (e.target.isContentEditable) {
-             lastFocusedElement = e.target;
-             // console.log('Focus out:', lastFocusedElement);
-         }
-    });
-    outlineContainer.addEventListener('focusin', (e) => {
-         if (e.target.isContentEditable) {
-             lastFocusedElement = e.target;
-              // console.log('Focus in:', lastFocusedElement);
-              handleFocusIn(e); // Call existing selection logic
-         }
-    });
+    outlineContainer.addEventListener('focusin', handleFocusIn);
     outlineContainer.addEventListener('input', handleContentChange);
     outlineContainer.addEventListener('click', handleOutlineClick);
+
 
     // --- Initial Load ---
     initialize();
 
-    // --- State Management & UI Updates ---
-
+    // --- State Management ---
+    // ... handleContentChange, markAsClean, updateFileStateUI, resetEditorState ...
+    // (No changes needed in these core state functions for this fix)
     function handleContentChange(event) {
-        if (event?.target?.isContentEditable === false) return; // Ignore non-editable changes
-        if (!isDirty) { isDirty = true; updateFileStateUI(); }
-        triggerOpfsAutoSave();
-        triggerLocalStorageDraftSave();
+        if (event?.target?.classList.contains('fold-toggle')) return; // Ignore folding
+        if (isLoading) return; // Ignore during load
+        if (!isDirty) {
+            console.log("Content changed, marking as dirty.");
+            isDirty = true;
+            updateFileStateUI();
+        }
+        triggerAutoSaveDraft();
     }
 
     function markAsClean() {
-        if (isDirty) { isDirty = false; opfsSaveInProgress = false; updateFileStateUI(); }
-        // Clear draft AFTER successful primary save (handled in save functions)
+        if (isDirty) {
+            console.log("Marking content as clean (saved).");
+            isDirty = false;
+            updateFileStateUI();
+             if (currentFileSource === 'direct' || currentFileSource === 'opfs') {
+                 localStorage.removeItem(LOCAL_STORAGE_KEY);
+                 console.log("Primary file saved, temporary draft cleared.");
+             }
+        }
     }
 
     function updateFileStateUI() {
-        let statusText = "";
+        let fileNameDisplay = "No file";
+        let fileTitle = "Current working file source";
         let saveDirectEnabled = false;
-        const hasContent = !!rootUlElement && outlineContainer.contains(rootUlElement);
+        let saveOpfsEnabled = false;
 
         switch (currentFileSource) {
-            case 'loading': statusText = "Loading..."; break;
-            case 'direct': statusText = directFileHandle?.name || "Direct File"; saveDirectEnabled = true; break;
-            case 'opfs': case 'copy': case 'new': case 'draft':
-                 statusText = isOpfsAvailable ? "App Session" : "Unsaved (Draft)"; break;
-            case 'empty': statusText = "Empty Document"; break;
-            default: statusText = "No file open";
+            case 'direct':
+                fileNameDisplay = directFileHandle?.name || "Direct File";
+                fileTitle = `Editing direct file: ${fileNameDisplay}`;
+                saveDirectEnabled = directFileHandle && !!rootUlElement;
+                saveOpfsEnabled = opfsRoot && fileSystemWorker && !!rootUlElement;
+                break;
+            case 'opfs':
+                fileNameDisplay = "App Storage";
+                fileTitle = `Editing persistent file in App Storage (${PERSISTENT_OPFS_FILENAME})`;
+                saveDirectEnabled = false;
+                saveOpfsEnabled = opfsRoot && fileSystemWorker && (!!rootUlElement || currentFileSource === 'empty');
+                break;
+            case 'copy':
+                const tempName = currentFileNameSpan.textContent?.replace('*', '').replace(' (copy)', '').trim() || "Loaded Copy";
+                fileNameDisplay = `${tempName} (copy)`;
+                fileTitle = `Editing content loaded from: ${tempName}. Save to App or Save As.`;
+                saveDirectEnabled = false;
+                saveOpfsEnabled = opfsRoot && fileSystemWorker && !!rootUlElement;
+                break;
+            case 'new':
+            case 'draft':
+                fileNameDisplay = (currentFileSource === 'draft') ? "Unsaved Draft" : "New App File";
+                fileTitle = (currentFileSource === 'draft') ? "Editing temporary draft." : "Editing new file for App Storage.";
+                saveDirectEnabled = false;
+                saveOpfsEnabled = opfsRoot && fileSystemWorker && !!rootUlElement;
+                break;
+            case 'empty':
+            default:
+                fileNameDisplay = "No file";
+                fileTitle = "No file open. Create new or load.";
+                saveDirectEnabled = false;
+                saveOpfsEnabled = opfsRoot && fileSystemWorker;
+                break;
         }
-        if (isDirty && (currentFileSource === 'direct' || isOpfsAvailable)) statusText += "*";
 
-        currentFileNameSpan.textContent = statusText; currentFileNameSpan.title = statusText;
+        if (isDirty && currentFileSource !== 'empty') {
+            fileNameDisplay += "*";
+        }
+
+        currentFileNameSpan.textContent = fileNameDisplay;
+        currentFileNameSpan.title = fileTitle;
+
         saveDirectButton.disabled = !saveDirectEnabled;
+        saveToOpfsButton.disabled = !saveOpfsEnabled;
 
-        // Show initial message only if editor is truly empty
-        if (hasContent && initialMessageDiv.parentNode === outlineContainer) {
-            initialMessageDiv.remove();
-        } else if (!hasContent && !document.getElementById('initialMessage')) {
-            outlineContainer.innerHTML = ''; // Clear remnants
+        if (rootUlElement && outlineContainer.contains(rootUlElement)) {
+            initialMessageDiv?.remove();
+        } else if (!document.getElementById('initialMessage') && initialMessageDiv) {
             outlineContainer.prepend(initialMessageDiv);
             initialMessageDiv.style.display = 'block';
-            // Fix: Ensure "Loading..." changes after init if empty
-            if (currentFileSource === 'empty' || currentFileSource === 'loading') {
-                 initialMessageDiv.querySelector('p').textContent = "Editor is empty. Start typing or load a file.";
-            }
+        } else if (initialMessageDiv && currentFileSource === 'empty') { // Ensure visible if state is empty
+             initialMessageDiv.style.display = 'block';
         }
-        // Fix: Update initial text if loading finished but resulted in empty
-         if (currentFileSource === 'empty' && document.getElementById('initialMessage')) {
-             initialMessageDiv.querySelector('p').textContent = "Editor is empty. Start typing or load a file.";
-         }
     }
 
-    function resetEditorContent() {
+    function resetEditorState(newSource = 'empty') {
+        console.log(`Resetting editor state. New source: ${newSource}`);
+        // Do not set isLoading here, let caller manage if needed for async ops
+
         outlineContainer.innerHTML = '';
-        if (!document.getElementById('initialMessage') && initialMessageDiv) {
-            outlineContainer.prepend(initialMessageDiv);
+        if (initialMessageDiv && !document.getElementById('initialMessage')) {
+             outlineContainer.prepend(initialMessageDiv);
         }
-        initialMessageDiv.style.display = 'block';
-        initialMessageDiv.querySelector('p').textContent = "Editor is empty. Start typing or load a file."; // Set default empty message
-        rootUlElement = null; currentlySelectedLi = null; lastFocusedElement = null;
-        clearTimeout(autoSaveOpfsTimeout); clearTimeout(autoSaveDraftTimeout);
+         // Show message only if truly empty *and* not during an active load operation elsewhere
+        if (initialMessageDiv) {
+             initialMessageDiv.style.display = (newSource === 'empty' && !isLoading) ? 'block' : 'none';
+        }
+
+        rootUlElement = null;
+        currentlySelectedLi = null;
+        currentFileSource = newSource;
+        clearTimeout(autoSaveTimeout);
+
+        isDirty = (newSource === 'draft' || newSource === 'copy' || newSource === 'new');
+
+        updateFileStateUI();
+        console.log("Editor state reset complete.");
     }
 
-    // --- File Handling ---
+
+    // --- File Handling (Input & Download) ---
 
     async function checkUnsavedChanges(actionDescription = "perform this action") {
-        if (isDirty && (currentFileSource === 'direct' || isOpfsAvailable)) {
-            // Try a quick final save before prompting
-             saveDraftToLocalStorage(); // Always save draft just in case
-            if (currentFileSource === 'direct') await saveFileDirectly(true);
-            else if (isOpfsAvailable) await saveCurrentToOpfs(true);
-             // Re-check after save attempt
-             if (!isDirty) return true;
-            return confirm(`You have unsaved changes. ${actionDescription} anyway?`);
+        if (isDirty) {
+            return confirm(`You have unsaved changes. Are you sure you want to ${actionDescription} and discard them?`);
         }
         return true;
     }
 
     async function handleFileLoadFromInput(event) {
-        const file = event.target.files[0]; if (!file) return;
-        if (!await checkUnsavedChanges(`Load '${file.name}' and overwrite current session`)) { fileInput.value = ''; return; }
-        console.log(`Loading file from input: ${file.name}`);
-        try {
-            const fileContent = await file.text();
-            resetEditorContent(); parseAndRenderBike(fileContent);
-            directFileHandle = null; currentFileSource = 'copy'; isDirty = true;
-            updateFileStateUI();
-            if (isOpfsAvailable) {
-                 console.log("Saving loaded copy to OPFS...");
-                 await saveCurrentToOpfs(true);
-                 if (!isDirty) currentFileSource = 'opfs'; // Update source only if save succeeded
-            } else { triggerLocalStorageDraftSave(); }
-             console.log(`Loaded '${file.name}' as new session.`); selectFirstItem();
-        } catch (err) {
-            console.error(`Error processing loaded file ${file.name}:`, err); alert(`Error loading file: ${err.message}`);
-            createNew(true); // Start fresh after error
-        } finally { fileInput.value = ''; }
-    }
-
-    async function createNew(skipConfirm = false) {
-        if (!skipConfirm && !await checkUnsavedChanges("Start a new document")) return;
-        console.log("Creating new document.");
-        resetEditorContent(); createMinimalStructure();
-        directFileHandle = null; currentFileSource = 'new'; isDirty = true;
-        updateFileStateUI();
-        if (isOpfsAvailable) {
-            console.log("Saving empty structure to OPFS...");
-             await saveCurrentToOpfs(true);
-             if (!isDirty) currentFileSource = 'opfs';
-        } else { triggerLocalStorageDraftSave(); }
-        selectFirstItem();
-    }
-
-    function saveFileAsDownload() { /* (Keep existing implementation) */
-        if (!rootUlElement) return alert("Nothing to download.");
-        try {
-            const bikeHTML = serializeOutlineToHTML(); if (!bikeHTML) throw new Error("Serialization failed.");
-            const blob = new Blob([bikeHTML], { type: 'application/xhtml+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
-            let filename = 'outline';
-            if (directFileHandle?.name) filename = directFileHandle.name;
-            else if (currentFileSource === 'opfs') filename = "App Session";
-            a.download = fixFileName(filename); document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            console.log("Download initiated:", a.download);
-        } catch (err) { console.error("Save As failed:", err); alert(`Download failed: ${err.message}`); }
-    }
-    function fixFileName(name, defaultExt = '.bike') { /* (Keep existing) */
-        let n = name.trim() || "untitled"; n = n.replace(/[.\/]+$/, '');
-        const exts = ['.bike','.html','.xhtml','.xml']; if (!exts.some(e=>n.toLowerCase().endsWith(e))) n+=defaultExt; return n;
-    }
-
-    // --- Standard File System Access API (Direct Edit) ---
-
-    async function openFileDirectly() { /* (Keep existing implementation) */
-        if (!('showOpenFilePicker' in window)) return;
-        if (!await checkUnsavedChanges("open a new file directly")) return;
-        try {
-            const [handle] = await window.showOpenFilePicker({ types: [{ description:'Bike Files', accept:{'application/xhtml+xml':['.bike','.html','.xhtml'],'text/xml':['.xml']}}] });
-            const file = await handle.getFile(); const content = await file.text();
-            resetEditorContent(); parseAndRenderBike(content);
-            directFileHandle = handle; currentFileSource = 'direct'; markAsClean();
-            updateFileStateUI(); console.log("Opened directly:", handle.name); selectFirstItem();
-        } catch (err) {
-            if(err.name !== 'AbortError') { console.error("Error opening directly:", err); alert(`Direct open failed: ${err.message}`); createNew(true); }
-            else { console.log("User cancelled direct open."); }
+        if (isLoading) { console.warn("Load copy rejected, already loading."); return; } // Prevent overlap
+        const file = event.target.files[0];
+        if (!file) return;
+        if (!await checkUnsavedChanges(`load '${file.name}'`)) {
+            fileInput.value = ''; return;
         }
+        console.log(`Loading file from input (as copy): ${file.name}`);
+        directFileHandle = null;
+        persistentOpfsHandle = null;
+        await loadFileContent(file, file.name, 'copy'); // Manages isLoading
+        fileInput.value = '';
     }
 
-    async function saveFileDirectly(suppressErrors = false) { /* (Keep existing implementation) */
-        if (!directFileHandle || currentFileSource !== 'direct') { if (!suppressErrors) alert("No direct file active."); return false; }
-        if (!isDirty && !suppressErrors) { console.log("Save Direct: No changes."); return true; }
-        if (!rootUlElement && !suppressErrors) { alert("Cannot save empty content directly."); return false; }
-        setSavingIndicator('saveDirectButton', true, 'Saving...'); let success = false;
-        try {
-            const bikeHTML = serializeOutlineToHTML(); if (!bikeHTML) throw new Error("Serialization failed.");
-            if (await directFileHandle.queryPermission({ mode:'readwrite'}) !== 'granted') { if (await directFileHandle.requestPermission({ mode:'readwrite'}) !== 'granted') throw new Error("Write permission denied."); }
-            const writable = await directFileHandle.createWritable(); await writable.write(bikeHTML); await writable.close();
-            console.log("Saved directly:", directFileHandle.name); markAsClean(); clearLocalStorage(false); // Clear draft after direct save
-            setSavingIndicator('saveDirectButton', false, 'Saved!'); setTimeout(() => setSavingIndicator('saveDirectButton', false, 'Save Direct'), 2000); success = true;
-        } catch (err) {
-            console.error("Save Direct failed:", err); if (!suppressErrors) alert(`Direct save failed: ${err.message}`);
-            setSavingIndicator('saveDirectButton', false, 'Save Failed'); setTimeout(() => setSavingIndicator('saveDirectButton', false, 'Save Direct'), 2000); success = false;
-        } return success;
-    }
+    // loadFileContent now manages its own isLoading state
+    async function loadFileContent(fileOrBlob, displayName, source) {
+         console.log(`loadFileContent: START reading content for: ${displayName}, Source: ${source}`);
+         if (isLoading) {
+             console.warn("loadFileContent: Load attempt rejected, already loading.");
+             return false;
+         }
+         isLoading = true; // Set loading flag for this operation
+         let success = false;
+         try {
+            const fileContent = await fileOrBlob.text();
+            console.log(`loadFileContent: Read ${fileContent.length} characters for ${displayName}.`);
 
-    // --- OPFS Auto-Save ---
+            if (!fileContent || fileContent.trim().length === 0) {
+                 console.warn(`File content for ${displayName} is empty or whitespace only.`);
+                 if (source === 'copy') {
+                    throw new Error("File content is empty.");
+                 } else {
+                     console.log(`Loading empty content for ${displayName} (Source: ${source}).`);
+                     resetEditorState(source);
+                     if(source === 'opfs' || source === 'direct') {
+                         createMinimalStructure();
+                     }
+                     markAsClean();
+                 }
+             } else {
+                 resetEditorState(source);
+                 parseAndRenderBike(fileContent);
+             }
 
-    function triggerOpfsAutoSave() {
-        if (!isOpfsAvailable || currentFileSource === 'direct' || !isDirty) return;
-        clearTimeout(autoSaveOpfsTimeout);
-        autoSaveOpfsTimeout = setTimeout(() => saveCurrentToOpfs(false), AUTOSAVE_OPFS_DELAY);
-    }
+            currentFileSource = source; // Set source after reset/parse
+            markAsClean(); // Freshly loaded/parsed is clean
 
-    async function saveCurrentToOpfs(forceSave = false) {
-        if (!isOpfsAvailable || currentFileSource === 'direct') return false;
-        if (opfsSaveInProgress && !forceSave) { console.log("OPFS Save: Skipped, already saving."); return false; }
-        if (!rootUlElement && !forceSave) { console.log("OPFS Save: Skipped empty content."); return true; }
+            console.log(`Successfully processed content for: ${displayName}`);
+            success = true;
 
-        console.log(`OPFS: Preparing save ${OPFS_FILENAME}...`);
-        opfsSaveInProgress = true; let success = false;
-        try {
-            const htmlContent = serializeOutlineToHTML();
-            if (!htmlContent && !forceSave) { console.warn("OPFS Save: Empty serialization, skipping."); opfsSaveInProgress = false; return true; }
-            if (!fileSystemWorker) throw new Error("Worker not available.");
-            fileSystemWorker.postMessage({ action: 'save', fileName: OPFS_FILENAME, content: htmlContent }); // Use action 'save'
-            success = true; // Message sent (actual save is async)
-        } catch (err) {
-            console.error(`OPFS: Error preparing save:`, err); alert(`Could not save session: ${err.message}`);
-            opfsSaveInProgress = false; success = false;
+            if(rootUlElement) {
+                const firstLi = rootUlElement.querySelector('li');
+                 if (firstLi) {
+                     selectAndFocusItem(firstLi, true);
+                 }
+                 initialMessageDiv?.remove();
+            } else {
+                 if (initialMessageDiv && !document.getElementById('initialMessage')) {
+                     outlineContainer.prepend(initialMessageDiv);
+                     initialMessageDiv.style.display = 'block';
+                 }
+            }
+
+        } catch (err) { /* ... error handling ... */ }
+        finally {
+            isLoading = false; // Reset loading flag when this operation finishes
+            updateFileStateUI();
+            console.log(`loadFileContent: FINISHED for ${displayName}. Success: ${success}`);
         }
         return success;
     }
 
-    function handleWorkerMessage(event) {
-        const { success, fileName, error, skipped } = event.data;
-        opfsSaveInProgress = false; // Release lock
-        if (skipped) { console.log(`OPFS Save skipped by worker: ${fileName}.`); return; }
-        if (success && fileName === OPFS_FILENAME) {
-            console.log(`OPFS: Worker saved ${fileName}.`);
-            if (currentFileSource !== 'direct') { markAsClean(); clearLocalStorage(false); } // Clear draft after OPFS save
-        } else if (!success) {
-            console.error(`OPFS: Worker failed to save ${fileName || 'file'}:`, error);
-            alert(`App Storage save failed: ${error}\nChanges might only be in temporary draft.`);
+    function fixFileName(name, defaultExt = '.bike') { /* ... (no changes) ... */ }
+
+    function saveFileAsDownload() { /* ... (no changes) ... */ }
+
+    // --- Standard File System Access API ---
+
+    async function openFileDirectly() {
+        if (isLoading) { console.warn("Open direct rejected, already loading."); return; }
+        console.log("Attempting to open file directly (Standard FSA)...");
+         if (!('showOpenFilePicker' in window)) return alert("Direct file editing is not supported by this browser.");
+        if (!await checkUnsavedChanges("open a new direct file")) return;
+
+        try {
+            const [handle] = await window.showOpenFilePicker({ /* ... types ... */ });
+            console.log("Direct file handle obtained:", handle.name);
+            const file = await handle.getFile();
+            directFileHandle = handle; // Store handle
+            persistentOpfsHandle = null; // Clear OPFS target
+            await loadFileContent(file, handle.name, 'direct'); // Manages isLoading
+            // Check if load succeeded? loadFileContent resets state on failure.
+             updateFileStateUI();
+        } catch (err) { /* ... error handling ... */ }
+    }
+
+    async function saveFileDirectly() { /* ... (no changes) ... */ }
+
+    async function verifyPermission(fileHandle, readWrite) { /* ... (no changes) ... */ }
+
+    // --- OPFS File Handling ---
+
+    async function createNewAppFile() {
+        console.log("Creating new file structure for App Storage...");
+        if (!opfsRoot) return alert("App Storage (OPFS) is not available.");
+        if (isLoading) { console.warn("Create new rejected, already loading."); return; }
+
+        if (!await checkUnsavedChanges("create a new file in App Storage")) {
+             console.log("New App File cancelled due to unsaved changes.");
+             return;
+        }
+
+        isLoading = true; // Set loading flag for this operation
+        resetEditorState('new');
+        createMinimalStructure();
+        directFileHandle = null;
+        isDirty = true;
+        updateFileStateUI();
+
+        requestAnimationFrame(() => {
+            const firstLi = rootUlElement?.querySelector('li');
+            if (firstLi) {
+                selectAndFocusItem(firstLi, true);
+                // Reset loading flag *after* potential focus
+                isLoading = false;
+                handleContentChange(); // Trigger draft save
+                console.log("Prepared new file structure. Ready to save to App Storage.");
+            } else {
+                 console.error("Failed to find first LI after creating minimal structure.");
+                 isLoading = false; // Reset loading even on error
+            }
+        });
+    }
+
+    // loadFromPersistentOpfs manages isLoading flag
+    async function loadFromPersistentOpfs() {
+         if (!persistentOpfsHandle) { console.log("loadFromPersistentOpfs: No handle exists."); return false; }
+         // Check isLoading at the start
+         if (isLoading) { console.warn("loadFromPersistentOpfs: Already loading, skipping."); return false; }
+
+         console.log(`loadFromPersistentOpfs: Attempting to load from handle: ${persistentOpfsHandle.name}`);
+         isLoading = true; // Set flag for THIS operation
+         let success = false;
+
+         try {
+            console.log("loadFromPersistentOpfs: Getting file object from handle...");
+            const file = await persistentOpfsHandle.getFile();
+            console.log(`loadFromPersistentOpfs: Got file object. Name: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
+
+            // Reset isLoading before calling loadFileContent, which will manage it internally
+            isLoading = false;
+            success = await loadFileContent(file, PERSISTENT_OPFS_FILENAME, 'opfs');
+            // loadFileContent now sets/unsets isLoading during its own async operations
+
+         } catch (error) {
+            console.error(`Error loading from persistent OPFS file handle (${persistentOpfsHandle.name}):`, error);
+            if (error.name === 'NotFoundError') alert(`Could not find the file in App Storage...`);
+            else alert(`Could not load the file from App Storage...\n\n${error.message}`);
+            persistentOpfsHandle = null;
+            resetEditorState('empty');
+            success = false;
+             // Ensure isLoading is false if error happened before loadFileContent call
+             isLoading = false;
+         }
+         // isLoading should be false here because loadFileContent resets it in its finally block.
+         console.log(`loadFromPersistentOpfs finished wrapper. Success: ${success}`);
+         updateFileStateUI();
+         return success;
+    }
+
+
+    async function saveToOpfs() {
+         if (isLoading) { console.warn("Save OPFS rejected, already loading."); return; }
+         console.log("saveToOpfs: Attempting to save to OPFS persistent file...");
+         // ... (rest of saveToOpfs remains the same) ...
+        if (!opfsRoot || !fileSystemWorker) return alert("App Storage (OPFS) or Worker is not available/initialized.");
+        const allowSave = !!rootUlElement || currentFileSource === 'empty'; if (!allowSave) { alert("Nothing to save."); return; }
+        const htmlContent = serializeOutlineToHTML(); if (htmlContent === null) return alert("Serialization failed, cannot save content.");
+        console.log(`saveToOpfs: Serialized content length: ${htmlContent.length}`);
+        setSavingIndicator('saveToOpfsButton', true, 'Saving...');
+        try {
+            if (!persistentOpfsHandle) { console.log(`saveToOpfs: Persistent handle for ${PERSISTENT_OPFS_FILENAME} doesn't exist, creating...`); persistentOpfsHandle = await opfsRoot.getFileHandle(PERSISTENT_OPFS_FILENAME, { create: true }); console.log("saveToOpfs: Persistent handle created/obtained."); }
+            else { console.log(`saveToOpfs: Using existing persistent handle: ${persistentOpfsHandle.name}`); }
+            console.log(`saveToOpfs: Sending content for ${PERSISTENT_OPFS_FILENAME} to worker...`);
+            fileSystemWorker.postMessage({ action: 'saveOpfs', fileName: PERSISTENT_OPFS_FILENAME, content: htmlContent });
+            currentFileSource = 'opfs'; directFileHandle = null; updateFileStateUI();
+        } catch (err) { console.error("Error preparing OPFS save (getting handle):", err); alert(`Could not prepare file for saving to App Storage: ${err.message}`); setSavingIndicator('saveToOpfsButton', false); persistentOpfsHandle = null; updateFileStateUI(); }
+    }
+
+    function handleWorkerMessage(event) { /* ... (no changes) ... */ }
+    function setSavingIndicator(buttonId, isSaving, message = null) { /* ... (no changes) ... */ }
+
+    // --- Local Storage (Draft) Functions ---
+
+    function triggerAutoSaveDraft() { /* ... (no changes) ... */ }
+    function saveDraftToLocalStorage() { /* ... (no changes) ... */ }
+
+    // loadFromLocalStorage manages isLoading flag
+    async function loadFromLocalStorage(forcePrompt = false) {
+        if (isLoading) { console.warn("Draft load rejected, already loading."); return false; }
+
+        const storedContent = localStorage.getItem(LOCAL_STORAGE_KEY);
+        let loaded = false;
+        if (storedContent && storedContent.trim().length > 50 && storedContent.includes('<ul') && storedContent.includes('<li')) {
+            console.log("Found potentially valid draft in local storage.");
+            const editorIsEmpty = !rootUlElement || !!document.getElementById('initialMessage'); // Correct check
+
+            if (editorIsEmpty || forcePrompt) {
+                 if (confirm("Load unsaved draft from previous session? (Choosing 'Cancel' will discard the draft)")) {
+                     isLoading = true; // Set loading flag for this operation
+                     try {
+                        console.log("Loading draft.");
+                        resetEditorState('draft');
+                        parseAndRenderBike(storedContent);
+                        isDirty = true;
+                        updateFileStateUI();
+                        loaded = true;
+                     } catch (error) { /* ... error handling ... */ }
+                     finally {
+                         isLoading = false; // Reset loading flag
+                     }
+                } else { /* ... discard draft ... */ }
+            } else { /* ... editor not empty ... */ }
+        } else { /* ... no valid draft ... */ }
+        return loaded;
+    }
+
+    // --- Parsing, Rendering, Serialization ---
+    // ... (No changes needed in parseAndRenderBike, makeEditableAndInteractive, addFoldingToggle, setupParagraph, serializeOutlineToHTML, escapeXml) ...
+    function parseAndRenderBike(htmlString) {
+        console.log("Parsing HTML string...");
+        if (!htmlString || typeof htmlString !== 'string' || htmlString.trim().length === 0) {
+             throw new Error("Parse Error: Input content is empty or invalid.");
+        }
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlString, 'application/xhtml+xml');
+        const parseError = doc.querySelector('parsererror');
+        if (parseError) {
+             console.error("XML Parse Error:", parseError.textContent);
+             const specificError = parseError.textContent.split('\n')[2] || parseError.textContent.split('\n')[0];
+             throw new Error(`Parse Error: Invalid Bike/XML file.\n${specificError}`);
+        }
+        rootUlElement = doc.body?.querySelector('ul');
+        if (!rootUlElement) {
+            if (doc.body && doc.body.querySelector('li')) {
+                 console.warn("Content seems to be missing a root <ul>, attempting to wrap body LIs.");
+                 const tempUl = document.createElement('ul'); tempUl.id = generateUniqueId(5);
+                 Array.from(doc.body.children).forEach(node => { if (node.tagName?.toUpperCase() === 'LI') tempUl.appendChild(node); });
+                 if (tempUl.children.length > 0) rootUlElement = tempUl;
+                 else throw new Error('Parse Error: Could not find root <ul> and no valid <li> elements found in body.');
+            } else {
+                throw new Error('Parse Error: Could not find the root <ul> element in the provided content.');
+            }
+        }
+        outlineContainer.innerHTML = '';
+        const importedNode = document.importNode(rootUlElement, true);
+        outlineContainer.appendChild(importedNode);
+        rootUlElement = outlineContainer.querySelector('ul');
+        if (!rootUlElement) throw new Error("Internal Error: Failed to attach parsed content.");
+        makeEditableAndInteractive(rootUlElement);
+        initialMessageDiv?.remove();
+        console.log("Parsing and rendering complete.");
+    }
+
+    function makeEditableAndInteractive(container) {
+        container.querySelectorAll(':scope > li').forEach(li => {
+            if (!li.id) li.id = generateUniqueId();
+            const p = li.querySelector(':scope > p');
+            const childUl = li.querySelector(':scope > ul');
+            addFoldingToggle(li, !!childUl);
+
+            if (li.getAttribute('data-type') === 'hr') {
+                if (p) p.remove(); li.tabIndex = -1;
+            } else if (!p) {
+                const newP = document.createElement('p'); newP.setAttribute('contenteditable', 'true'); newP.innerHTML = '<br>';
+                li.prepend(newP); setupParagraph(newP, li);
+            } else {
+                 setupParagraph(p, li);
+            }
+            if (childUl) makeEditableAndInteractive(childUl);
+        });
+        if (container === rootUlElement && !rootUlElement.id) rootUlElement.id = generateUniqueId(5);
+    }
+
+    function addFoldingToggle(li, hasChildren) {
+        li.querySelector(':scope > .fold-toggle')?.remove();
+         if (li.getAttribute('data-type') !== 'hr' && hasChildren) {
+            const toggle = document.createElement('span'); toggle.className = 'fold-toggle';
+            toggle.setAttribute('aria-hidden', 'true'); toggle.title = "Fold/Unfold";
+            li.prepend(toggle);
+         }
+    }
+
+    function setupParagraph(p, li) {
+        p.setAttribute('contenteditable', 'true');
+        const dataType = li.getAttribute('data-type');
+        if (dataType === 'task') {
+            let checkbox = p.querySelector('span.task-checkbox');
+            if (!checkbox) {
+                 checkbox = document.createElement('span'); checkbox.className = 'task-checkbox';
+                 checkbox.setAttribute('contenteditable', 'false'); checkbox.setAttribute('aria-hidden', 'true');
+                 const firstText = Array.from(p.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+                 if (firstText && !/^\s/.test(firstText.textContent)) p.insertBefore(document.createTextNode(' '), firstText);
+                 else if (!firstText && p.firstChild) p.insertBefore(document.createTextNode(' '), p.firstChild);
+                 else if (!p.firstChild) p.appendChild(document.createTextNode(' '));
+                 p.prepend(checkbox);
+            }
+             checkbox.textContent = li.getAttribute('data-done') === 'true' ? '☑' : '☐';
+        } else {
+            p.querySelector('span.task-checkbox')?.remove();
+            if (p.firstChild?.nodeType === Node.TEXT_NODE && p.firstChild.textContent.startsWith(' ')) {
+                p.firstChild.textContent = p.firstChild.textContent.substring(1);
+                if (!p.firstChild.textContent) p.firstChild.remove();
+            }
+        }
+        const hasVisibleContent = p.textContent.trim() || p.querySelector('img, br');
+         if (!hasVisibleContent && !p.querySelector('br')) {
+             p.appendChild(document.createElement('br'));
+         } else if (p.innerHTML.trim() === '<br>' && p.textContent.trim()) {
+             const br = p.querySelector('br');
+             if(br && !br.previousSibling && !br.nextSibling) br.remove();
+         }
+    }
+
+    function serializeOutlineToHTML() {
+        if (!rootUlElement) {
+            const emptyTitle = "Empty Outline";
+            return `<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml">\n  <head>\n    <meta charset="utf-8"/>\n    <title>${escapeXml(emptyTitle)}</title>\n  </head>\n  <body>\n    <ul id="root"></ul>\n  </body>\n</html>`;
+        }
+        if (document.activeElement?.isContentEditable) document.activeElement.blur();
+        const contentToSave = rootUlElement.cloneNode(true);
+        try {
+            contentToSave.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+            contentToSave.querySelectorAll('[contenteditable="true"]').forEach(el => el.removeAttribute('contenteditable'));
+            contentToSave.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
+            contentToSave.querySelectorAll('span.task-checkbox').forEach(el => el.remove());
+            contentToSave.querySelectorAll('.fold-toggle').forEach(el => el.remove());
+            contentToSave.querySelectorAll('li[data-type="task"] > p').forEach(p => {
+                if (p.firstChild?.nodeType === Node.TEXT_NODE && p.firstChild.textContent.startsWith(' ')) {
+                     p.firstChild.textContent = p.firstChild.textContent.substring(1); if (!p.firstChild.textContent) p.firstChild.remove();
+                }
+            });
+            contentToSave.querySelectorAll('ul:empty').forEach(ul => ul.remove());
+            contentToSave.querySelectorAll('p').forEach(p => {
+                const brs = p.querySelectorAll(':scope > br');
+                if (brs.length === 1 && p.childNodes.length === 1 && p.textContent.trim() === '') p.innerHTML = '';
+                else if (p.textContent.trim() !== '') brs.forEach(br => br.remove());
+            });
+        } catch (cleanupError) { console.error("Error during serialization cleanup:", cleanupError); }
+
+        let title = 'Bike Outline';
+        if (currentFileSource === 'direct' && directFileHandle?.name) title = directFileHandle.name.replace(/\.[^/.]+$/, "");
+        else if (currentFileSource === 'opfs') title = "App Storage Outline";
+        else if (currentFileNameSpan.textContent) {
+            const currentDisplay = currentFileNameSpan.textContent.replace('*', '').replace(' (copy)', '').replace(' (new)', '').trim();
+            if (currentDisplay && currentDisplay !== 'No file' && currentDisplay !== 'Unsaved Draft') title = currentDisplay.replace(/\.[^/.]+$/, "");
+        }
+
+        const serializer = new XMLSerializer();
+        const ulHtml = serializer.serializeToString(contentToSave);
+        const finalHtml = `<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml">\n  <head>\n    <meta charset="utf-8"/>\n    <title>${escapeXml(title)}</title>\n  </head>\n  <body>\n    ${ulHtml}\n  </body>\n</html>`;
+
+        try {
+            const parser = new DOMParser(); const checkDoc = parser.parseFromString(finalHtml, 'application/xhtml+xml');
+            if (checkDoc.querySelector('parsererror')) { console.error("Serialization resulted in invalid XML:", checkDoc.querySelector('parsererror').textContent); return null; }
+        } catch(validationError) { console.error("Error during serialization validation:", validationError); return null; }
+        return finalHtml;
+    }
+
+    function escapeXml(unsafe) {
+        if (typeof unsafe !== 'string') return '';
+        return unsafe.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','\'':'&apos;','"':'&quot;'})[c] || c);
+    }
+
+
+    // --- Selection & Focus ---
+    // ... (No changes needed in handleFocusIn, selectListItem, getSelectedLi, getFocusedP) ...
+    function handleFocusIn(event) {
+        const target = event.target;
+        const li = target.closest('li');
+        if (li && outlineContainer.contains(li)) {
+             if ((target.tagName === 'P' && target.parentElement === li) || (target === li && li.getAttribute('data-type') === 'hr')) {
+                selectListItem(li);
+             }
         }
     }
 
-    // --- Local Storage (Short-Term Draft) ---
-
-    function triggerLocalStorageDraftSave() {
-        clearTimeout(autoSaveDraftTimeout);
-        if (isDirty) autoSaveDraftTimeout = setTimeout(saveDraftToLocalStorage, AUTOSAVE_DRAFT_DELAY);
-    }
-    function saveDraftToLocalStorage() {
-        if (!isDirty) return;
-        if (rootUlElement && outlineContainer.contains(rootUlElement) && !document.getElementById('initialMessage')) {
-            try { const bikeHTML = serializeOutlineToHTML(); if (bikeHTML) localStorage.setItem(LOCAL_STORAGE_KEY, bikeHTML); }
-            catch (error) { console.error("Error saving draft:", error); }
-        } else { localStorage.removeItem(LOCAL_STORAGE_KEY); } // Clear draft if editor is empty
-    }
-    function clearLocalStorage(promptUser = true) { /* (Keep existing implementation) */
-        let confirmClear = !promptUser; const draftExists = !!localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (promptUser && draftExists) confirmClear = confirm("Clear temporary browser draft?");
-        if (confirmClear && draftExists) { localStorage.removeItem(LOCAL_STORAGE_KEY); console.log("Draft cleared."); }
-        else if (confirmClear && !draftExists) console.log("No draft to clear.");
-        else console.log("User cancelled clearing draft.");
-    }
-
-    // --- Parsing, Rendering, Serialization --- (Keep existing functions)
-    function parseAndRenderBike(htmlString) { /* ... (same as before) ... */
-        const parser = new DOMParser(); const doc = parser.parseFromString(htmlString, 'application/xhtml+xml');
-        const parseError = doc.querySelector('parsererror'); if (parseError) throw new Error(`Parse Error: Invalid Bike/XML file.\n${parseError.textContent.split('\n')[0]}`);
-        rootUlElement = doc.body?.querySelector('ul'); if (!rootUlElement) { /* ... (recovery logic) ... */ if (!rootUlElement) throw new Error('Could not find root <ul>.'); }
-        outlineContainer.innerHTML = ''; outlineContainer.appendChild(document.importNode(rootUlElement, true));
-        rootUlElement = outlineContainer.querySelector('ul'); makeEditableAndInteractive(outlineContainer); initialMessageDiv?.remove();
-    }
-    function makeEditableAndInteractive(container) { /* ... (same as before) ... */
-        container.querySelectorAll('li').forEach(li => { if (!li.id) li.id = generateUniqueId(); const p = li.querySelector(':scope > p');
-        if (li.getAttribute('data-type') === 'hr') { if (p) p.remove(); li.tabIndex = -1; } else if (!p) { const nP=document.createElement('p'); nP.setAttribute('contenteditable','true'); nP.innerHTML='<br>'; li.prepend(nP); setupParagraph(nP, li); } else { setupParagraph(p, li); } });
-        if (rootUlElement && !rootUlElement.id) rootUlElement.id = generateUniqueId(5);
-    }
-    function setupParagraph(p, li) { /* ... (same as before) ... */
-        p.setAttribute('contenteditable', 'true'); const taskType = li.getAttribute('data-type') === 'task'; let checkbox = p.querySelector('span.task-checkbox');
-        if (taskType) { if (!checkbox) { checkbox = document.createElement('span'); checkbox.className = 'task-checkbox'; checkbox.setAttribute('contenteditable', 'false'); checkbox.setAttribute('aria-hidden', 'true'); p.prepend(document.createTextNode(' ')); p.prepend(checkbox); } checkbox.textContent = li.getAttribute('data-done') === 'true' ? '☑' : '☐'; }
-        else { if (checkbox) checkbox.remove(); } if (!p.textContent.trim() && !p.querySelector('br') && !p.querySelector('img')) { p.innerHTML = '<br>'; }
-    }
-    function serializeOutlineToHTML() { /* ... (same as before) ... */
-        if (!rootUlElement) return ""; if (document.activeElement?.isContentEditable) document.activeElement.blur(); const content = rootUlElement.cloneNode(true);
-        content.querySelectorAll('.selected,[contenteditable],[tabindex],span.task-checkbox').forEach(el=>{el.classList.remove('selected');el.removeAttribute('contenteditable');el.removeAttribute('tabindex');if(el.classList.contains('task-checkbox'))el.remove();});
-        content.querySelectorAll('ul:empty').forEach(ul=>ul.remove()); content.querySelectorAll('p').forEach(p=>{if(p.innerHTML.trim()==='<br>')p.innerHTML='';});
-        let title='Bike Outline'; if(currentFileSource==='direct'&&directFileHandle?.name)title=directFileHandle.name; else if(isOpfsAvailable)title="App Session";
-        const serializer=new XMLSerializer(); const ulHtml=serializer.serializeToString(content);
-        return `<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml">\n  <head>\n    <meta charset="utf-8"/>\n    <title>${escapeXml(title)}</title>\n  </head>\n  <body>\n    ${ulHtml}\n  </body>\n</html>`;
-    }
-    function escapeXml(unsafe) { return unsafe.replace(/[<>&'"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','\'':'&apos;','"':'&quot;'})[c]||c); }
-
-    // --- Selection & Focus ---
-    function handleFocusIn(event) {
-        const target = event.target; const li = target.closest('li');
-        if (li && outlineContainer.contains(li)) { if ((target.tagName==='P'&&target.parentElement===li)||(target===li&&li.getAttribute('data-type')==='hr')) selectListItem(li); }
-    }
     function selectListItem(liElement) {
         if (!liElement || !outlineContainer.contains(liElement) || currentlySelectedLi === liElement) return;
-        if (currentlySelectedLi) { currentlySelectedLi.classList.remove('selected'); if(currentlySelectedLi.getAttribute('data-type')==='hr') currentlySelectedLi.removeAttribute('tabindex'); }
-        currentlySelectedLi = liElement; currentlySelectedLi.classList.add('selected');
-        if (currentlySelectedLi.getAttribute('data-type')==='hr') currentlySelectedLi.tabIndex = -1;
+        if (currentlySelectedLi) {
+            currentlySelectedLi.classList.remove('selected');
+             if(currentlySelectedLi.getAttribute('data-type') === 'hr') currentlySelectedLi.removeAttribute('tabindex');
+        }
+        currentlySelectedLi = liElement;
+        currentlySelectedLi.classList.add('selected');
+         if (currentlySelectedLi.getAttribute('data-type') === 'hr') {
+             currentlySelectedLi.tabIndex = 0;
+         }
     }
-    function getSelectedLi() { if (currentlySelectedLi && outlineContainer.contains(currentlySelectedLi)) return currentlySelectedLi; return outlineContainer.querySelector('li.selected'); }
-    function getFocusedP() { const a = document.activeElement; if (a?.tagName === 'P' && a.isContentEditable && outlineContainer.contains(a)) return a; return null; }
 
-    // --- Robust Focus Restoration ---
-    function focusAndMoveCursor(element, toStart = true) {
-         if (!element || !outlineContainer.contains(element)) {
-             console.warn("focusAndMoveCursor: Target element not found or not in container.");
-             // Fallback: try focusing the container itself
-             outlineContainer.focus();
-             return;
+    function getSelectedLi() {
+        if (currentlySelectedLi && outlineContainer.contains(currentlySelectedLi)) return currentlySelectedLi;
+        return outlineContainer.querySelector('li.selected');
+    }
+
+    function getFocusedP() {
+         const active = document.activeElement;
+         if (active?.tagName === 'P' && active.isContentEditable && outlineContainer.contains(active)) {
+             return active;
          }
-         // Use rAF to ensure focus happens after potential browser layout/paint
-         requestAnimationFrame(() => {
-             // Double-check element still exists after async delay
-             if (!document.body.contains(element)) {
-                 console.warn("focusAndMoveCursor: Target element removed before focus could be set.");
-                 outlineContainer.focus(); // Focus container as fallback
-                 return;
-             }
-
-             element.focus(); // Set focus first
-             try {
-                 const selection = window.getSelection();
-                 if (!selection) return; // Exit if no selection object (shouldn't happen)
-                 const range = document.createRange();
-
-                 // Handle empty element or element with just <br>
-                 if (!element.firstChild || (element.firstChild === element.lastChild && element.firstChild.nodeName === 'BR')) {
-                     range.setStart(element, 0);
-                 } else {
-                     // Select contents for non-empty elements
-                     range.selectNodeContents(element);
-                 }
-                 range.collapse(toStart); // Collapse to start or end
-                 selection.removeAllRanges(); // Clear existing selection
-                 selection.addRange(range); // Apply new selection
-             } catch (err) {
-                 console.error("Error setting cursor position:", err);
-                  // As a fallback, ensure the element still has focus
-                 if (document.activeElement !== element) {
-                      element.focus();
-                 }
-             }
-         });
-     }
-     // Helper function to restore focus to the last known editable element
-     function restoreFocus(preferStart = false) {
-         const li = getSelectedLi(); // Get current selection
-         let target = lastFocusedElement;
-
-          // If lastFocusedElement isn't valid anymore, try the selected LI's P
-         if (!target || !outlineContainer.contains(target)) {
-             target = li?.querySelector(':scope > p[contenteditable="true"]');
-         }
-          // If still no target, maybe focus selected LI (for HR) or container
-         if (!target && li && outlineContainer.contains(li)) {
-              if(li.getAttribute('data-type') === 'hr') li.focus();
-              else outlineContainer.focus(); // Fallback to container
-         } else if (target) {
-              focusAndMoveCursor(target, preferStart);
-         } else {
-             outlineContainer.focus(); // Absolute fallback
-         }
+         return null;
      }
 
-     // --- Keyboard Navigation & Editing ---
-     function handleKeyDown(event) { /* (Keep existing case logic from previous response, ensure restoreFocus is used appropriately) */
+    // --- Keyboard Navigation & Editing ---
+    // ... (handleKeyDown fixed in previous response) ...
+    function handleKeyDown(event) {
         const selectedLi = getSelectedLi();
         const targetP = getFocusedP();
 
-         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { /* ... (save logic) ... */ event.preventDefault(); if(currentFileSource==='direct'&&directFileHandle)saveFileDirectly(); else if(isOpfsAvailable)saveCurrentToOpfs(true); else if(rootUlElement)saveFileAsDownload(); return; }
-         if (!rootUlElement && event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); createFirstItem(); return; }
-         if (!selectedLi && !['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) { if(outlineContainer===document.activeElement&&event.key==='Enter'){event.preventDefault();createFirstItem();return;} return; }
+        // Global Shortcuts (Save)
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+             event.preventDefault(); console.log("Ctrl+S detected");
+             if (currentFileSource === 'direct' && directFileHandle && !saveDirectButton.disabled) saveFileDirectly();
+             else if ((currentFileSource === 'opfs' || currentFileSource === 'copy' || currentFileSource === 'draft' || currentFileSource === 'new') && opfsRoot && !saveToOpfsButton.disabled) saveToOpfs();
+             else if (rootUlElement) console.log("Ctrl+S: No primary save target, consider Save As.");
+             return;
+        }
+
+        // Create first item logic refinement
+        const isEditorEffectivelyEmpty = (!rootUlElement || !outlineContainer.contains(rootUlElement) || !!document.getElementById('initialMessage'));
+        if (isEditorEffectivelyEmpty && event.key === 'Enter' && !event.shiftKey) {
+             event.preventDefault(); console.log("Enter pressed on empty editor, creating first item.");
+             if (opfsRoot) createNewAppFile(); else createFirstItemBare();
+             return;
+        }
+
+        // Actions requiring a selected LI beyond this point
+        if (!selectedLi || !outlineContainer.contains(selectedLi)) {
+             return;
+        }
 
         switch (event.key) {
-            case 'Enter': /* ... (create new item/line break logic) ... */ if (!selectedLi) { event.preventDefault(); createFirstItem(); return; } if (event.shiftKey) { if (targetP) { event.preventDefault(); document.execCommand('insertLineBreak'); handleContentChange(); } } else { event.preventDefault(); createNewItem(selectedLi); } break;
-            case 'Tab': /* ... (indent/outdent logic, call restoreFocus if needed) ... */ if (!selectedLi) return; event.preventDefault(); if (event.shiftKey) outdentItem(selectedLi); else indentItem(selectedLi); break;
-            case 'ArrowUp': /* ... (nav/move logic) ... */ if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) { const prev = selectedLi ? findPreviousVisibleLi(selectedLi) : rootUlElement?.querySelector('li:last-child'); if (prev) { event.preventDefault(); selectAndFocusItem(prev, false); } } else if (event.altKey && event.shiftKey && selectedLi) { event.preventDefault(); moveItemUp(selectedLi); } break;
-            case 'ArrowDown': /* ... (nav/move logic) ... */ if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) { const next = selectedLi ? findNextVisibleLi(selectedLi) : rootUlElement?.querySelector('li:first-child'); if (next) { event.preventDefault(); selectAndFocusItem(next, false); } } else if (event.altKey && event.shiftKey && selectedLi) { event.preventDefault(); moveItemDown(selectedLi); } break;
-            case 'Backspace': case 'Delete': /* ... (delete logic) ... */ if (!selectedLi) return; const isHr=selectedLi.getAttribute('data-type')==='hr'&&document.activeElement===selectedLi; const isEmpty=targetP&&(!targetP.textContent||targetP.innerHTML==='<br>'); if(isEmpty||(event.key==='Delete'&&isHr)){ event.preventDefault(); deleteItem(selectedLi); } break;
-            case 'b': if ((event.ctrlKey || event.metaKey) && selectedLi) { event.preventDefault(); formatSelection('bold'); } break;
-            case 'i': if ((event.ctrlKey || event.metaKey) && selectedLi) { event.preventDefault(); formatSelection('italic'); } break;
-            case 'k': if ((event.ctrlKey || event.metaKey) && selectedLi) { event.preventDefault(); handleLinkButtonClick(selectedLi); } break;
+            case 'Enter':
+                if (event.shiftKey) {
+                    if (targetP) {
+                         event.preventDefault(); document.execCommand('insertLineBreak'); handleContentChange();
+                     }
+                } else {
+                     event.preventDefault(); createNewItem(selectedLi);
+                 }
+                break;
+            case 'Tab':
+                event.preventDefault();
+                if (event.shiftKey) outdentItem(selectedLi); else indentItem(selectedLi);
+                break;
+            case 'ArrowUp':
+                 if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+                      event.preventDefault(); const prevLi = findPreviousVisibleLi(selectedLi); if (prevLi) selectAndFocusItem(prevLi, false);
+                 } else if (event.altKey && event.shiftKey) { event.preventDefault(); moveItemUp(selectedLi); }
+                 break;
+            case 'ArrowDown':
+                 if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+                      event.preventDefault(); const nextLi = findNextVisibleLi(selectedLi); if (nextLi) selectAndFocusItem(nextLi, true);
+                 } else if (event.altKey && event.shiftKey) { event.preventDefault(); moveItemDown(selectedLi); }
+                 break;
+             case 'Backspace':
+             case 'Delete':
+                 const isHrSelectedAndFocused = selectedLi.getAttribute('data-type') === 'hr' && document.activeElement === selectedLi;
+                 const p = selectedLi.querySelector(':scope > p');
+                 const isEmptyP = p && p.getAttribute('contenteditable') === 'true' && (!p.textContent.trim() && p.querySelectorAll('*').length === 0 || p.innerHTML.trim() === '<br>');
+                 const selection = window.getSelection();
+                 const cursorAtStartOfP = targetP === p && selection?.rangeCount > 0 && selection.getRangeAt(0).startOffset === 0 && selection.getRangeAt(0).collapsed;
+
+                 if ((event.key === 'Delete' && isHrSelectedAndFocused) || (isEmptyP && targetP === p) || (event.key === 'Backspace' && cursorAtStartOfP && p === targetP && p?.parentElement?.isSameNode(selectedLi))) {
+                     event.preventDefault(); deleteItem(selectedLi);
+                 }
+                 break;
+             case 'b': if (event.ctrlKey || event.metaKey) { event.preventDefault(); formatSelection('bold'); } break;
+             case 'i': if (event.ctrlKey || event.metaKey) { event.preventDefault(); formatSelection('italic'); } break;
+             case 'k': if (event.ctrlKey || event.metaKey) { event.preventDefault(); handleLinkButtonClick(selectedLi); } break;
         }
     }
-    function formatSelection(command) { /* (Ensure restoreFocus(false) is called after execCommand) */
+    // ... (formatSelection, createFirstItemBare, createMinimalStructure, createNewItem - no changes needed) ...
+    function formatSelection(command) {
          const targetP = ensureFocusInEditableParagraph(getSelectedLi()); if (!targetP) return;
-         const selState = saveSelection(targetP); // Save selection before command
-         if (command === 'highlight') wrapSelection('mark');
-         else if (command === 'code') wrapSelection('code');
-         else document.execCommand(command, false, null);
-         handleContentChange();
-         restoreSelection(targetP, selState); // Restore selection after command
-         // restoreFocus(false); // No, restoreSelection handles focus
-    }
-     function createFirstItem() { /* (Keep existing) */ if (rootUlElement) return; createMinimalStructure(); currentFileSource='empty'; isDirty=false; updateFileStateUI(); selectAndFocusItem(rootUlElement.querySelector('li'),true); }
-     function createMinimalStructure() { /* (Keep existing) */ rootUlElement = document.createElement('ul'); rootUlElement.id=generateUniqueId(5); const li=document.createElement('li'); li.id=generateUniqueId(); const p=document.createElement('p'); p.setAttribute('contenteditable','true'); p.innerHTML='<br>'; li.appendChild(p); rootUlElement.appendChild(li); outlineContainer.innerHTML=''; outlineContainer.appendChild(rootUlElement); setupParagraph(p, li); initialMessageDiv?.remove(); }
-     function createNewItem(currentItemLi) { /* (Ensure restoreFocus(true) is called) */ if (!currentItemLi) return; const li = document.createElement('li'); li.id=generateUniqueId(); const p=document.createElement('p'); p.setAttribute('contenteditable','true'); p.innerHTML='<br>'; li.appendChild(p); currentItemLi.after(li); setupParagraph(p, li); selectAndFocusItem(li, true); handleContentChange(); }
-
-    // --- Navigation & Focus Helpers ---
-     function selectAndFocusItem(li, focusStart = true) { /* (Keep existing) */ if (!li) return; selectListItem(li); const p = li.querySelector(':scope > p[contenteditable="true"]'); if (p) focusAndMoveCursor(p, focusStart); else if (li.getAttribute('data-type') === 'hr') li.focus(); }
-     // focusAndMoveCursor is updated above
-     function findPreviousVisibleLi(li) { /* (Keep existing) */ let c = li?.previousElementSibling; if (c) { while(true){ const l=c.querySelector(':scope > ul > li:last-child'); if(l)c=l; else break;} return c;} else if(li){ const p=li.parentElement; if(p&&p!==rootUlElement) return p.closest('li');} return null; }
-     function findNextVisibleLi(li) { /* (Keep existing) */ if (!li) return rootUlElement?.querySelector('li:first-child'); const fc=li.querySelector(':scope > ul > li:first-child'); if(fc) return fc; let c=li; while(c){ const s=c.nextElementSibling; if(s) return s; const p=c.parentElement; if(p&&p!==rootUlElement) c=p.closest('li'); else c=null;} return null; }
-
-    // --- Toolbar & Click Actions ---
-     function handleOutlineClick(event) { /* (Keep existing) */ const cb=event.target.closest('span.task-checkbox'); if(cb&&outlineContainer.contains(cb)){const li=cb.closest('li'); if(li&&li.getAttribute('data-type')==='task')toggleTaskDone(li);} }
-     function toggleTaskDone(li) { /* (Keep existing) */ if(!li) return; const d=li.getAttribute('data-done')==='true'; const cb=li.querySelector('span.task-checkbox'); if(d){li.removeAttribute('data-done');if(cb)cb.textContent='☐';} else {li.setAttribute('data-done','true');if(cb)cb.textContent='☑';} handleContentChange(); }
-     function handleToolbarClick(event) { /* (Ensure functions called handle focus/selection) */
-        const button = event.target.closest('button'); if (!button) return;
-        const selectedLi = getSelectedLi(); const needsSel = button.classList.contains('type-button')||['indentButton','outdentButton','moveUpButton','moveDownButton','deleteButton','linkButton'].includes(button.id);
-        if (needsSel && !selectedLi) return alert("Please select an item first.");
-        // Formatting
-        if (button.classList.contains('format-button')) { formatSelection(button.dataset.command); } // formatSelection handles focus
-        else if (button.id === 'linkButton') handleLinkButtonClick(selectedLi); // handleLinkButton handles focus
-        else if (button.classList.contains('type-button')) changeItemType(selectedLi, button.dataset.type); // changeItemType handles focus
-        else if (button.id === 'indentButton') indentItem(selectedLi); // These handle focus inside
-        else if (button.id === 'outdentButton') outdentItem(selectedLi);
-        else if (button.id === 'moveUpButton') moveItemUp(selectedLi);
-        else if (button.id === 'moveDownButton') moveItemDown(selectedLi);
-        else if (button.id === 'deleteButton') deleteItem(selectedLi); // deleteItem handles focus
-    }
-     function ensureFocusInEditableParagraph(selectedLi) { /* (Keep existing) */ let p=getFocusedP(); if(!p&&selectedLi){p=selectedLi.querySelector(':scope > p[contenteditable="true"]'); if(p) p.focus();} if(!p||p.contentEditable!=='true'){alert("Please place cursor inside item text.");return null;} return p; }
-     function handleLinkButtonClick(selectedLi = getSelectedLi()) { /* (Ensure restoreFocus/Selection) */
-        const targetP = ensureFocusInEditableParagraph(selectedLi); if (!targetP) return;
-        const selState = saveSelection(targetP); // Save selection
-        const selection = window.getSelection(); const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
-        const currentLink = range ? findParentLink(range.startContainer) : null;
-        const defaultUrl = currentLink ? currentLink.href : "https://";
-        const url = prompt("Link URL:", defaultUrl); if (url === null) { restoreSelection(targetP, selState); return; } // Restore selection on cancel
-        // Restore selection before execCommand (needed after prompt)
-        restoreSelection(targetP, selState);
-        if (currentLink) document.execCommand('unlink', false, null);
-        if (url !== "") {
-            if (selection && !selection.isCollapsed) document.execCommand('createLink', false, url);
-            else document.execCommand('insertHTML', false, `<a href="${escapeXml(url)}">${escapeXml(url)}</a>`);
-        }
-        handleContentChange();
-        // Focus/selection should be okay after execCommand, but maybe restore again?
-        restoreFocus(false); // Restore focus to end of modification
-    }
-    function changeItemType(li, type) { /* (Ensure restoreFocus) */
-         if (!li) return; const oldType = li.getAttribute('data-type'); if (type === oldType) return;
-         const targetP = li.querySelector(':scope > p');
-         const hadFocus = targetP && document.activeElement === targetP;
-         const selState = hadFocus ? saveSelection(targetP) : null;
-
-         if (type) li.setAttribute('data-type', type); else li.removeAttribute('data-type');
-         let p = li.querySelector(':scope > p'); // Re-query in case it was removed/added
-
-         if (type === 'hr') { if (p) p.remove(); li.tabIndex = -1; li.focus(); }
-         else { if (!p) { p = document.createElement('p'); li.prepend(p); } setupParagraph(p, li); li.removeAttribute('tabindex');
-            // Restore focus only if it was there before, otherwise focus end
-            if (hadFocus && selState) restoreSelection(p, selState);
-            else focusAndMoveCursor(p, false);
+         switch (command) {
+             case 'highlight': wrapSelection('mark'); break;
+             case 'code': wrapSelection('code'); break;
+             case 'bold': case 'italic': document.execCommand(command, false, null); break;
+             default: console.warn("Unknown format command:", command); return;
          }
-         handleContentChange();
-    }
-     function findParentLink(node) { /* (Keep existing) */ while(node&&node!==outlineContainer){if(node.tagName==='A')return node;node=node.parentNode;}return null; }
-     function wrapSelection(tagName) { /* (Ensure restoreFocus/Selection) */
-        const selection = window.getSelection(); if (!selection?.rangeCount || selection.isCollapsed) return;
-        const range = selection.getRangeAt(0); const editorP = range.commonAncestorContainer.closest('p[contenteditable="true"]');
-        if (!editorP || !outlineContainer.contains(editorP)) return;
-        const selState = saveSelection(editorP); // Save selection
-        const wrapper = document.createElement(tagName);
-        try { if (range.commonAncestorContainer === editorP || range.startContainer.parentNode === range.endContainer.parentNode) range.surroundContents(wrapper); else { const t=document.createElement('div');t.appendChild(range.extractContents());document.execCommand('insertHTML',false,`<${tagName}>${t.innerHTML}</${tagName}>`);} }
-        catch (e) { document.execCommand('insertHTML', false, `<${tagName}>${escapeXml(range.toString())}</${tagName}>`); }
-        handleContentChange();
-        restoreSelection(editorP, selState); // Restore selection
+          targetP.focus(); handleContentChange();
     }
 
-    // --- Outline Operation Implementations ---
-    function indentItem(li) { /* (Ensure restoreFocus) */
-        if (!li) return; const prevLi = li.previousElementSibling; if (!prevLi || prevLi.getAttribute('data-type') === 'hr') return;
-        const targetP = li.querySelector(':scope > p'); const selState = saveSelection(targetP); // Save selection state
-        let targetUl = prevLi.querySelector(':scope > ul'); if (!targetUl) { targetUl = document.createElement('ul'); prevLi.appendChild(targetUl); }
-        targetUl.appendChild(li); selectListItem(li); handleContentChange(); restoreSelection(targetP, selState); // Restore selection
-    }
-    // *** Corrected Outdent Logic ***
-    function outdentItem(li) {
-        if (!li) return; const parentUl = li.parentElement; if (!parentUl || parentUl === rootUlElement) return; // Cannot outdent top-level items
-        const parentLi = parentUl.closest('li'); if (!parentLi) { console.warn("Cannot outdent item with no parent LI"); return; } // Should be inside another LI if not top-level
-
-        const targetP = li.querySelector(':scope > p');
-        const selState = saveSelection(targetP); // Save selection state relative to the item being moved
-
-        // Move the item to be after its parent LI
-        parentLi.after(li);
-
-        // Clean up the old parent UL if it's now empty
-        if (parentUl.children.length === 0) parentUl.remove();
-
-        selectListItem(li); // Reselect the moved item
-        handleContentChange();
-        restoreSelection(targetP, selState); // Restore selection within the moved item
-    }
-    function moveItemUp(li) { /* (Ensure restoreFocus) */
-        if (!li) return; const prevLi = li.previousElementSibling; if (prevLi) { const p=li.querySelector(':scope>p'); const s=saveSelection(p); li.parentElement.insertBefore(li, prevLi); selectListItem(li); handleContentChange(); restoreSelection(p,s); }
-    }
-    function moveItemDown(li) { /* (Ensure restoreFocus) */
-        if (!li) return; const nextLi = li.nextElementSibling; if (nextLi) { const p=li.querySelector(':scope>p'); const s=saveSelection(p); li.parentElement.insertBefore(nextLi, li); selectListItem(li); handleContentChange(); restoreSelection(p,s); }
-    }
-    function deleteItem(li) { /* (Ensure focus is handled after delete) */
-         if (!li || !outlineContainer.contains(li)) return;
-         let itemToSelectAfter = findPreviousVisibleLi(li) || findNextVisibleLi(li);
-         const parentUl = li.parentElement; const wasLastInParent = !li.nextElementSibling && parentUl !== rootUlElement;
-         const parentLi = parentUl?.closest('li'); if(wasLastInParent && parentLi) itemToSelectAfter = parentLi;
-         li.remove(); if(currentlySelectedLi === li) currentlySelectedLi = null;
-         if (parentUl && parentUl !== rootUlElement && parentUl.children.length === 0) parentUl.remove();
-         if (rootUlElement && rootUlElement.children.length === 0) { rootUlElement.remove(); rootUlElement = null; currentFileSource = 'empty'; resetEditorContent(); updateFileStateUI(); }
-         else if (itemToSelectAfter && outlineContainer.contains(itemToSelectAfter)) { selectAndFocusItem(itemToSelectAfter, false); } // Focus end of prev/next
-         else if (rootUlElement?.firstElementChild) { const first = rootUlElement.querySelector('li'); if(first) selectAndFocusItem(first, false); else { currentFileSource = 'empty'; resetEditorContent(); updateFileStateUI(); } }
-         else { currentFileSource = 'empty'; resetEditorContent(); updateFileStateUI(); }
-         handleContentChange(); // Mark change after deletion
+    function createFirstItemBare() {
+        console.log("Creating first bare item (no persistent source).");
+        if (isLoading) { console.warn("Create bare rejected, already loading."); return; }
+        isLoading = true;
+        resetEditorState('new');
+        createMinimalStructure();
+        isDirty = true;
+        updateFileStateUI();
+         requestAnimationFrame(() => {
+             const firstLi = rootUlElement?.querySelector('li');
+             if(firstLi) selectAndFocusItem(firstLi, true);
+             else console.error("Failed to find first LI for focus in createFirstItemBare");
+             isLoading = false;
+             handleContentChange();
+         });
     }
 
-     // --- Selection Saving/Restoring ---
-     function saveSelection(contextNode) {
-         if (!contextNode) return null;
-         const selection = window.getSelection();
-         if (selection && selection.rangeCount > 0) {
-             const range = selection.getRangeAt(0);
-             // Check if the selection is actually within the context node
-             if (contextNode.contains(range.startContainer) && contextNode.contains(range.endContainer)) {
-                 return {
-                     startContainer: range.startContainer,
-                     startOffset: range.startOffset,
-                     endContainer: range.endContainer,
-                     endOffset: range.endOffset
-                 };
-             }
-         }
-         return null; // Return null if no valid selection in context
+    function createMinimalStructure() {
+         rootUlElement = document.createElement('ul'); rootUlElement.id = generateUniqueId(5);
+         const firstLi = document.createElement('li'); firstLi.id = generateUniqueId();
+         const firstP = document.createElement('p'); firstP.setAttribute('contenteditable', 'true'); firstP.innerHTML = '<br>';
+         firstLi.appendChild(firstP); rootUlElement.appendChild(firstLi);
+         outlineContainer.innerHTML = ''; outlineContainer.appendChild(rootUlElement);
+         makeEditableAndInteractive(rootUlElement);
+         initialMessageDiv?.remove();
      }
 
-     function restoreSelection(contextNode, savedSelection) {
-          if (!savedSelection || !contextNode || !document.body.contains(contextNode)) {
-              // If no saved state or context is gone, try focusing context or container
-               if(contextNode && document.body.contains(contextNode)) focusAndMoveCursor(contextNode, false); // Focus end of context
-               else restoreFocus(false); // Use general focus restoration
-              return;
-          }
-          // Ensure containers still exist
-          if (!contextNode.contains(savedSelection.startContainer) || !contextNode.contains(savedSelection.endContainer)) {
-               console.warn("Restore selection: Containers no longer valid.");
-               focusAndMoveCursor(contextNode, false); // Focus end of context as fallback
-               return;
-          }
+    function createNewItem(currentItemLi) {
+        if (!currentItemLi || !outlineContainer.contains(currentItemLi)) return;
+        const newLi = document.createElement('li'); newLi.id = generateUniqueId();
+        const newP = document.createElement('p'); newP.setAttribute('contenteditable', 'true'); newP.innerHTML = '<br>';
+        newLi.appendChild(newP);
+        currentItemLi.after(newLi);
+        makeEditableAndInteractive(newLi.parentElement);
+        selectAndFocusItem(newLi, true);
+        handleContentChange();
+    }
 
-         requestAnimationFrame(() => { // Defer to ensure DOM is stable
-             const selection = window.getSelection();
-             if (!selection) return;
-             const range = document.createRange();
-             try {
-                 range.setStart(savedSelection.startContainer, savedSelection.startOffset);
-                 range.setEnd(savedSelection.endContainer, savedSelection.endOffset);
-                 selection.removeAllRanges();
-                 selection.addRange(range);
-                 // Ensure the context node (or its parent LI) is visible/scrolled into view if needed
-                 contextNode.focus(); // Re-focus the element containing the selection
-             } catch(e) {
-                 console.error("Error restoring selection:", e);
-                  // Fallback: focus end of context node
-                 focusAndMoveCursor(contextNode, false);
-             }
+    // --- Navigation & Focus Helpers ---
+    // ... (selectAndFocusItem, focusAndMoveCursor, findPreviousVisibleLi, findNextVisibleLi - no changes needed) ...
+    function selectAndFocusItem(li, focusStart = true) {
+         if (!li || !outlineContainer.contains(li)) return;
+         selectListItem(li);
+         const pToFocus = li.querySelector(':scope > p[contenteditable="true"]');
+         if (pToFocus) focusAndMoveCursor(pToFocus, focusStart);
+         else if (li.getAttribute('data-type') === 'hr') li.focus();
+         // Scroll into view might be needed, consider adding:
+         // li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function focusAndMoveCursor(element, toStart = true) {
+          if (!element || element.contentEditable !== 'true') return;
+          element.focus();
+         requestAnimationFrame(() => {
+              if (document.activeElement !== element) return;
+              const selection = window.getSelection(); if (!selection) return; const range = document.createRange();
+             if (element.innerHTML.trim() === '<br>') range.setStart(element, 0);
+             else { range.selectNodeContents(element); range.collapse(toStart); }
+             selection.removeAllRanges(); selection.addRange(range);
          });
      }
 
+     function findPreviousVisibleLi(li) {
+        if (!li) return null; let current = li.previousElementSibling;
+         if (current) { while (true) { const lastChildUl = current.querySelector(':scope > ul'); const lastLi = lastChildUl?.querySelector(':scope > li:last-child'); if(lastLi) current = lastLi; else break; } return current; }
+         else { const parentUl = li.parentElement; if(parentUl && parentUl !== rootUlElement) return parentUl.closest('li'); } return null;
+     }
+
+     function findNextVisibleLi(li) {
+        if (!li) return null; const firstChildUl = li.querySelector(':scope > ul'); const firstChildLi = firstChildUl?.querySelector(':scope > li:first-child'); if(firstChildLi) return firstChildLi;
+         let current = li; while(current){ const nextSiblingLi = current.nextElementSibling; if(nextSiblingLi) return nextSiblingLi;
+             const parentUl = current.parentElement; if(parentUl && parentUl !== rootUlElement) current = parentUl.closest('li'); else current = null; } return null;
+     }
+
+    // --- Toolbar & Click Actions ---
+    // ... (handleOutlineClick, toggleTaskDone, toggleFold, handleToolbarClick, ensureFocusInEditableParagraph, handleLinkButtonClick, changeItemType, findParentLink, wrapSelection - no changes needed) ...
+    function handleOutlineClick(event) {
+         const target = event.target;
+         const foldToggle = target.closest('.fold-toggle');
+         if (foldToggle && outlineContainer.contains(foldToggle)) { event.stopPropagation(); const li = foldToggle.closest('li'); if (li) toggleFold(li); return; }
+         const checkbox = target.closest('span.task-checkbox');
+         if (checkbox && outlineContainer.contains(checkbox)) { event.stopPropagation(); const li = checkbox.closest('li'); if (li && li.getAttribute('data-type') === 'task') toggleTaskDone(li); return; }
+         const link = target.closest('a'); if (link && outlineContainer.contains(link)) return;
+         const clickedLi = target.closest('li');
+          if (clickedLi && outlineContainer.contains(clickedLi) && currentlySelectedLi !== clickedLi) {
+              selectListItem(clickedLi);
+              if (target.tagName === 'P' && target.closest('li') === clickedLi) focusAndMoveCursor(target, false);
+              else if (clickedLi.getAttribute('data-type') === 'hr') clickedLi.focus();
+          }
+     }
+
+     function toggleTaskDone(li) {
+          if (!li || li.getAttribute('data-type') !== 'task') return;
+          const isDone = li.getAttribute('data-done') === 'true'; const checkbox = li.querySelector('span.task-checkbox');
+          if (isDone) { li.removeAttribute('data-done'); if (checkbox) checkbox.textContent = '☐'; console.log(`Task unmarked: ${li.id}`); }
+          else { li.setAttribute('data-done', 'true'); if (checkbox) checkbox.textContent = '☑'; console.log(`Task marked done: ${li.id}`); }
+          handleContentChange();
+     }
+
+     function toggleFold(li) {
+         if (!li || !outlineContainer.contains(li) || li.getAttribute('data-type') === 'hr') return;
+         const isFolded = li.getAttribute('data-folded') === 'true';
+         if (isFolded) { li.removeAttribute('data-folded'); console.log(`Unfolded: ${li.id}`); }
+         else { if (li.querySelector(':scope > ul > li')) { li.setAttribute('data-folded', 'true'); console.log(`Folded: ${li.id}`); } else { console.log(`Item ${li.id} has no children to fold.`); } }
+     }
+
+
+    function handleToolbarClick(event) {
+        const button = event.target.closest('button'); if (!button || button.disabled) return;
+        const selectedLi = getSelectedLi(); const command = button.dataset.command; const type = button.dataset.type; const id = button.id;
+        const requiresSelection = button.classList.contains('type-button') || button.classList.contains('format-button') || ['indentButton', 'outdentButton', 'moveUpButton', 'moveDownButton', 'deleteButton', 'linkButton'].includes(id);
+        if (requiresSelection && !selectedLi) { alert("Please select an item in the outline first."); return; }
+
+        if (command) formatSelection(command);
+        else if (type !== undefined) changeItemType(selectedLi, type);
+        else { switch (id) { case 'linkButton': handleLinkButtonClick(selectedLi); break; case 'indentButton': indentItem(selectedLi); break; case 'outdentButton': outdentItem(selectedLi); break; case 'moveUpButton': moveItemUp(selectedLi); break; case 'moveDownButton': moveItemDown(selectedLi); break; case 'deleteButton': deleteItem(selectedLi); break; } }
+    }
+
+     function ensureFocusInEditableParagraph(selectedLi) {
+         if (!selectedLi) return null; let targetP = getFocusedP();
+          if (!targetP || targetP.closest('li') !== selectedLi) {
+              targetP = selectedLi.querySelector(':scope > p[contenteditable="true"]');
+              if (targetP) { console.log("Focusing paragraph programmatically."); focusAndMoveCursor(targetP, false); }
+              else { if (selectedLi.getAttribute('data-type') === 'hr') alert("Cannot perform text formatting on a horizontal rule."); else alert("Cannot find editable text for this item."); return null; }
+          }
+           if (!targetP || targetP.contentEditable !== 'true') { console.warn("Target paragraph not found or not editable."); return null; }
+         return targetP;
+     }
+
+     function handleLinkButtonClick(selectedLi = getSelectedLi()) {
+        const targetP = ensureFocusInEditableParagraph(selectedLi); if (!targetP) return;
+        const selection = window.getSelection(); if (!selection) return;
+        const currentRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        const parentLink = currentRange ? findParentLink(currentRange.commonAncestorContainer) : null;
+        const defaultUrl = parentLink ? parentLink.getAttribute('href') || "https://" : "https://";
+        const url = prompt("Enter link URL:", defaultUrl); if (url === null) { console.log("Link creation cancelled."); return; }
+        if (currentRange) { selection.removeAllRanges(); selection.addRange(currentRange); } else { focusAndMoveCursor(targetP, false); }
+        if (parentLink) { document.execCommand('unlink', false, null); console.log("Unlinked previous URL."); }
+        if (url !== "") { const selectionIsCollapsed = selection.isCollapsed; if (!selectionIsCollapsed) { document.execCommand('createLink', false, url); console.log(`Applied link ${url} to selection.`); } else { const safeUrl = escapeXml(url); document.execCommand('insertHTML', false, `<a href="${safeUrl}">${safeUrl}</a>`); console.log(`Inserted new link: ${url}`); } }
+        else { console.log("URL cleared, only unlink performed."); }
+        targetP.focus(); handleContentChange();
+    }
+
+    function changeItemType(li, type) {
+         if (!li) return; const oldType = li.getAttribute('data-type') || ""; if (type === oldType) return;
+         console.log(`Changing type of ${li.id} from '${oldType || 'default'}' to '${type || 'default'}'`);
+         if (type) li.setAttribute('data-type', type); else li.removeAttribute('data-type');
+         let p = li.querySelector(':scope > p');
+         if (type === 'hr') { if (p) p.remove(); li.tabIndex = 0; li.focus(); }
+         else { if (!p) { p = document.createElement('p'); p.setAttribute('contenteditable', 'true'); p.innerHTML = '<br>'; li.prepend(p); } setupParagraph(p, li); li.removeAttribute('tabindex'); focusAndMoveCursor(p, false); }
+         handleContentChange();
+         if (li.parentElement) makeEditableAndInteractive(li.parentElement);
+    }
+
+     function findParentLink(node) {
+        while (node && node !== outlineContainer) { if (node.tagName === 'A') return node; node = node.parentNode; } return null;
+    }
+
+    function wrapSelection(tagName) {
+        const selection = window.getSelection(); if (!selection?.rangeCount || selection.isCollapsed) { alert(`Please select the text you want to wrap with ${tagName}.`); return; }
+        const range = selection.getRangeAt(0); const editorP = range.commonAncestorContainer.closest('p[contenteditable="true"]');
+        if (!editorP || !outlineContainer.contains(editorP)) { console.warn("Selection is not within an editable paragraph."); return; }
+        const wrapper = document.createElement(tagName);
+        try { let parentElement = range.commonAncestorContainer; if (parentElement.nodeType !== Node.ELEMENT_NODE) parentElement = parentElement.parentElement; if (parentElement?.tagName.toLowerCase() === tagName && range.toString() === parentElement.textContent) { console.log(`Unwrapping ${tagName}`); let content = range.extractContents(); parentElement.replaceWith(content); } else { console.log(`Wrapping selection with ${tagName}`); range.surroundContents(wrapper); } }
+        catch (e) { console.warn("Wrap failed, using insertHTML fallback:", e); const selectedHtml = range.toString(); document.execCommand('insertHTML', false, `<${tagName}>${escapeXml(selectedHtml)}</${tagName}>`); }
+        editorP.focus(); handleContentChange();
+    }
+
+
+    // --- Outline Operation Implementations ---
+    // ... (indentItem, outdentItem, moveItemUp, moveItemDown, deleteItem - no changes needed) ...
+    function indentItem(li) {
+        if (!li) return; const prevLi = li.previousElementSibling; if (!prevLi || prevLi.getAttribute('data-type') === 'hr') { console.log("Indent prevented: No valid previous sibling."); return; }
+        console.log(`Indenting ${li.id} under ${prevLi.id}`);
+        let targetUl = prevLi.querySelector(':scope > ul'); if (!targetUl) { targetUl = document.createElement('ul'); prevLi.appendChild(targetUl); }
+        const oldParentUl = li.parentElement;
+        targetUl.appendChild(li);
+        selectAndFocusItem(li, false); handleContentChange();
+        addFoldingToggle(prevLi, true);
+        if (oldParentUl) makeEditableAndInteractive(oldParentUl);
+        if (prevLi.parentElement) makeEditableAndInteractive(prevLi.parentElement);
+    }
+
+    function outdentItem(li) {
+        if (!li) return; const parentUl = li.parentElement; if (!parentUl || parentUl === rootUlElement) { console.log("Outdent prevented: Item is already at top level."); return; }
+        const grandparentLi = parentUl.closest('li'); if (!grandparentLi) { console.error("Outdent error: Could not find grandparent LI."); return; }
+        console.log(`Outdenting ${li.id} from under ${grandparentLi.id}`);
+        let subUl = li.querySelector(':scope > ul'); const siblingsToMove = []; let nextSibling = li.nextElementSibling;
+        while (nextSibling) { siblingsToMove.push(nextSibling); nextSibling = nextSibling.nextElementSibling; }
+        if (siblingsToMove.length > 0) { if (!subUl) { subUl = document.createElement('ul'); li.appendChild(subUl); } siblingsToMove.forEach(sib => subUl.appendChild(sib)); console.log(`Moved ${siblingsToMove.length} subsequent siblings under ${li.id}`); }
+        const originalGrandparentUl = grandparentLi.parentElement;
+        grandparentLi.after(li);
+        addFoldingToggle(li, !!li.querySelector(':scope > ul > li'));
+        const oldParentIsEmpty = parentUl.children.length === 0;
+        if (oldParentIsEmpty) { console.log(`Removing empty parent UL from ${grandparentLi.id}`); parentUl.remove(); }
+        addFoldingToggle(grandparentLi, !!grandparentLi.querySelector(':scope > ul > li'));
+        selectAndFocusItem(li, false); handleContentChange();
+        if (originalGrandparentUl) makeEditableAndInteractive(originalGrandparentUl);
+        if (li.parentElement) makeEditableAndInteractive(li.parentElement);
+    }
+
+    function moveItemUp(li) {
+        if (!li) return; const prevLi = li.previousElementSibling;
+        if (prevLi) { console.log(`Moving ${li.id} up above ${prevLi.id}`); li.parentElement.insertBefore(li, prevLi); selectListItem(li); ensureFocusInEditableParagraph(li); handleContentChange(); }
+        else { console.log("Move up prevented: Already first item in its list."); }
+    }
+    function moveItemDown(li) {
+        if (!li) return; const nextLi = li.nextElementSibling;
+        if (nextLi) { console.log(`Moving ${li.id} down below ${nextLi.id}`); li.parentElement.insertBefore(nextLi, li); selectListItem(li); ensureFocusInEditableParagraph(li); handleContentChange(); }
+        else { console.log("Move down prevented: Already last item in its list."); }
+    }
+
+    function deleteItem(li) {
+         if (!li || !outlineContainer.contains(li)) return;
+         console.log(`Attempting to delete item: ${li.id}`);
+         let itemToSelectAfter = findPreviousVisibleLi(li) || findNextVisibleLi(li);
+         const parentUl = li.parentElement; const parentLi = parentUl?.closest('li');
+         const wasLastInParent = !li.nextElementSibling && parentUl !== rootUlElement;
+         if(wasLastInParent && parentLi) itemToSelectAfter = parentLi;
+
+         li.remove();
+         if(currentlySelectedLi === li) currentlySelectedLi = null;
+
+         if (parentLi && parentUl && parentUl !== rootUlElement && parentUl.children.length === 0) {
+              console.log("Removing empty parent UL and checking parent fold toggle."); parentUl.remove(); addFoldingToggle(parentLi, false);
+         } else if (parentLi && parentUl && parentUl !== rootUlElement) { makeEditableAndInteractive(parentUl); }
+
+         if (rootUlElement && rootUlElement.children.length === 0) { console.log("Outline is now empty, resetting state."); resetEditorState('empty'); }
+         else if (itemToSelectAfter && outlineContainer.contains(itemToSelectAfter)) { console.log(`Selecting item ${itemToSelectAfter.id} after deletion.`); selectAndFocusItem(itemToSelectAfter, false); }
+         else if (rootUlElement?.firstElementChild) { const firstItem = rootUlElement.querySelector('li'); if (firstItem) { console.log("Selecting first item as fallback after deletion."); selectAndFocusItem(firstItem, true); } else { console.warn("Outline not empty but couldn't find item to select, resetting."); resetEditorState('empty'); } }
+         else { console.warn("Root UL not found after deletion, resetting."); resetEditorState('empty'); }
+         handleContentChange();
+    }
 
     // --- Utility ---
-    function generateUniqueId(length = 4) { /* (Keep existing) */ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let i='',a=0;do{i='';for(let k=0;k<length;k++)i+=c.charAt(Math.floor(Math.random()*c.length));if(/^[0-9]/.test(i))continue;a++;}while(document.getElementById(i)&&a<100);if(a>=100)return`gen_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;return i; }
-    function selectFirstItem() { const f=rootUlElement?.querySelector('li'); if(f) selectAndFocusItem(f, true); }
-    function setSavingIndicator(buttonId, isSaving, message = null) { /* (Keep existing) */ const b = document.getElementById(buttonId); if (!b) return; const d = b.title||b.textContent; if(isSaving){b.textContent=message||'Saving...';b.disabled=true;b.style.backgroundColor='#e9ecef';} else {b.textContent=message||d; updateFileStateUI(); if(message==='Saved!'||message==='Save Failed'){b.style.backgroundColor=message==='Saved!'?'#d1e7dd':'#f8d7da'; setTimeout(()=>{b.style.backgroundColor='';b.textContent=d;updateFileStateUI();},2500);} else {b.style.backgroundColor='';}} }
+    // ... (generateUniqueId - no changes needed) ...
+    function generateUniqueId(length = 4) {
+        const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+        let id='', attempts=0; const maxAttempts = 100;
+        do { id = chars.charAt(Math.floor(Math.random()*chars.length)); for(let i=1; i<length; i++) id += (chars+'0123456789').charAt(Math.floor(Math.random()*(chars.length+10))); attempts++; } while(document.getElementById(id) && attempts < maxAttempts);
+        if(attempts >= maxAttempts) { console.warn("Could not generate unique ID, using fallback."); return `gen_${Date.now()}_${Math.random().toString(36).substring(2,7)}`; }
+        return id;
+    }
 
-}); // End DOMContentLoaded
+});

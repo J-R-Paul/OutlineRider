@@ -1,7 +1,7 @@
 {
     "name": "Bike Editor Pro",
     "short_name": "BikeEditor",
-    "description": "A simple web-based Bike outline editor.",
+    "description": "A web-based editor for .bike outline files.",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#f8f9fa",
@@ -10,12 +10,14 @@
       {
         "src": "icon-192.png",
         "sizes": "192x192",
-        "type": "image/png"
+        "type": "image/png",
+        "purpose": "any maskable"
       },
       {
         "src": "icon-512.png",
         "sizes": "512x512",
-        "type": "image/png"
+        "type": "image/png",
+         "purpose": "any maskable"
       }
     ]
   }

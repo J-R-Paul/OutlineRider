@@ -6,24 +6,22 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background-color: #f8f9fa;
-    font-size: 16px;
-    overscroll-behavior: none; /* Prevent pull-to-refresh interfering with drag */
+    background-color: #f8f9fa; /* Lighter gray */
+    font-size: 16px; /* Base font size */
 }
 
 header {
     padding: 8px 15px;
-    background-color: #e9ecef;
+    background-color: #e9ecef; /* Slightly darker header */
     border-bottom: 1px solid #dee2e6;
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* Stack main/actions vertically by default */
     gap: 8px;
-    flex-shrink: 0; /* Prevent header shrinking */
 }
 
 .header-main {
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* Push filename right */
     align-items: center;
     width: 100%;
 }
@@ -39,215 +37,421 @@ header h1 {
 #currentFileName {
     font-style: italic;
     font-size: 0.9em;
-    color: #6c757d;
+    color: #6c757d; /* Grayer text */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 250px;
+    max-width: 250px; /* Allow more space */
     text-align: right;
-    margin-left: 10px; /* Space from title */
 }
-#currentFileName.dirty::after {
-    content: '*';
-    color: #dc3545; /* Red asterisk for dirty */
-    margin-left: 2px;
-    font-weight: bold;
-}
-
 
 .file-actions {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-wrap: wrap; /* Allow groups to wrap */
+    gap: 10px; /* Gap between groups */
     align-items: center;
 }
 
 .action-group {
     display: flex;
-    flex-wrap: nowrap;
-    gap: 6px;
+    flex-wrap: nowrap; /* Keep buttons in a group together */
+    gap: 6px; /* Gap within a group */
     align-items: center;
-    padding: 2px 0; /* Tighter padding */
+    padding: 4px 0; /* Add a little vertical space if groups wrap */
 }
 
-/* Label as button */
+/* Style the label to look like a button */
 .file-input-label {
-    padding: 5px 10px; cursor: pointer; border: 1px solid #ced4da; background-color: #f8f9fa;
-    border-radius: 4px; font-size: 0.9em; color: #495057; transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
-    display: inline-block; line-height: 1.5;
+    padding: 5px 10px;
+    cursor: pointer;
+    border: 1px solid #ced4da;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #495057;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    display: inline-block; /* Necessary for padding */
+    line-height: 1.5; /* Match button line-height */
 }
-.file-input-label:hover { background-color: #e9ecef; border-color: #adb5bd; }
-#fileInput { display: none; }
+.file-input-label:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+/* Hide the actual file input */
+#fileInput {
+    display: none;
+}
 
-/* Header buttons */
+
 header button {
-    padding: 5px 10px; cursor: pointer; border: 1px solid #ced4da; background-color: #f8f9fa;
-    border-radius: 4px; font-size: 0.9em; color: #495057; transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    padding: 5px 10px;
+    cursor: pointer;
+    border: 1px solid #ced4da; /* Slightly softer border */
+    background-color: #f8f9fa; /* Match body background */
+    border-radius: 4px; /* Slightly more rounded */
+    font-size: 0.9em;
+    color: #495057; /* Darker gray text */
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
 }
-header button:hover { background-color: #e9ecef; border-color: #adb5bd; }
-header button:disabled { cursor: not-allowed; opacity: 0.65; background-color: #e9ecef; }
 
-/* Toolbar */
+header button:hover:not(:disabled) {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+header button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+    background-color: #e9ecef;
+}
+
 #toolbar {
-    padding: 6px 15px; background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; display: flex;
-    gap: 5px; flex-wrap: wrap; align-items: center; flex-shrink: 0;
+    padding: 6px 15px; /* Reduced padding */
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    align-items: center;
 }
+
 #toolbar button {
-    padding: 4px 8px; cursor: pointer; border: 1px solid transparent; background-color: transparent;
-    border-radius: 4px; font-size: 1em; color: #495057; min-width: 30px; text-align: center; line-height: 1.4;
+    padding: 4px 8px; /* Smaller toolbar buttons */
+    cursor: pointer;
+    border: 1px solid transparent; /* Transparent border initially */
+    background-color: transparent; /* Transparent background */
+    border-radius: 4px;
+    font-size: 1em; /* Slightly larger text in buttons */
+    color: #495057;
+    min-width: 30px; /* Ensure minimum tap target */
+    text-align: center;
+    line-height: 1.4;
 }
-#toolbar button:hover { background-color: #e9ecef; border-color: #ced4da; }
-#toolbar hr { border: none; border-left: 1px solid #dee2e6; height: 18px; margin: 0 3px; }
+#toolbar button:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+#toolbar hr {
+    border: none;
+    border-left: 1px solid #dee2e6;
+    height: 18px; /* Shorter separator */
+    margin: 0 3px; /* Closer spacing */
+}
+/* Specific button styles */
 #toolbar button b, #toolbar button i { font-size: 1.1em; }
 #toolbar button[data-type="heading"] { font-weight: bold; }
 #toolbar button[data-type="hr"] { color: #adb5bd; }
 
-/* Main Editor Area */
+
 main#outlineContainer {
-    flex-grow: 1; padding: 15px; overflow-y: auto; outline: none; background-color: #fff;
-    line-height: 1.6; color: #212529;
-}
-/* Remove blue highlight on tap on mobile */
-main#outlineContainer * {
-     -webkit-tap-highlight-color: transparent;
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    outline: none;
+    background-color: #fff;
+    line-height: 1.6; /* Slightly increased line height */
+    color: #212529; /* Default text color */
 }
 
-
-#initialMessage { /* (Keep existing styles) */
-    padding: 20px; background-color: #f1f3f5; border-radius: 5px; margin-bottom: 20px;
-    font-size: 0.95em; color: #495057; border: 1px solid #e9ecef;
+#initialMessage {
+    padding: 20px;
+    background-color: #f1f3f5;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+    color: #495057;
+    border: 1px solid #e9ecef;
 }
 #initialMessage ul { list-style: none; padding-left: 0; margin-top: 10px; }
 #initialMessage li { margin-bottom: 8px; padding-left: 0; }
 #initialMessage li::before { content: none; }
 #initialMessage b { color: #343a40; }
-.task-example { font-family: monospace; background: #e9ecef; padding: 1px 4px; border-radius: 3px;}
+.task-example {
+    font-family: monospace;
+    background: #e9ecef;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
 
-/* --- Outline Items --- */
-#outlineContainer ul { list-style: none; padding-left: 24px; margin: 0; }
-#outlineContainer ul ul { padding-left: 24px; }
+
+/* --- Outline Styling --- */
+
+#outlineContainer ul {
+    list-style: none;
+    padding-left: 24px; /* Base Indentation */
+    margin: 0;
+}
+/* No extra padding for nested ULs needed if LI handles positioning */
 
 #outlineContainer li {
-    margin: 2px 0; position: relative;
-    /* Make LI the drag handle */
-    /* cursor: grab; */ /* Add this via JS during drag setup */
+    margin: 2px 0; /* Tighter vertical spacing */
+    position: relative; /* Needed for absolute positioning of ::before and toggle */
+    padding-left: 18px; /* Create space for fold toggle */
 }
-/* Indentation Guides (Optional) */
-/*
-#outlineContainer ul { border-left: 1px solid #e9ecef; }
-#outlineContainer li { margin-left: -1px; border-left: 1px solid transparent; }
-*/
-
-/* Folding Triangle */
-.fold-triangle {
-    position: absolute;
-    left: -18px; /* Adjust based on padding-left of ul */
-    top: 0.4em; /* Vertically align roughly */
-    cursor: pointer;
-    font-size: 0.8em;
-    color: #adb5bd;
-    padding: 2px; /* Make tap target larger */
-    user-select: none;
-    width: 12px; /* Ensure consistent width */
-    text-align: center;
-    transition: transform 0.1s ease-in-out;
-}
-.fold-triangle.folded {
-    transform: rotate(-90deg);
-}
-.fold-triangle.empty { /* Hide triangle if no children */
-    opacity: 0;
-    pointer-events: none;
-}
-
 
 #outlineContainer li > p {
-    margin: 0; padding: 2px 5px; min-height: 1.6em; outline: none;
-    border: 1px solid transparent; white-space: pre-wrap; word-wrap: break-word; border-radius: 3px;
-    position: relative;
-    /* Ensure paragraph takes up available space horizontally */
-    display: block; /* Or flex if needed, but block is usually fine */
-    /* Optional: Add padding left to avoid overlapping fold triangle text visually if needed */
-    /* padding-left: 20px; If triangle is absolutely positioned within LI */
+    margin: 0;
+    padding: 2px 5px; /* Reduced padding */
+    min-height: 1.6em; /* Match line-height */
+    outline: none;
+    border: 1px solid transparent;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    border-radius: 3px;
+    /* Make sure P doesn't overlap the toggle space */
+    display: block; /* Or inline-block if needed */
 }
-#outlineContainer li > p:focus { border: 1px dashed #adb5bd; background-color: #f8f9fa; }
 
-/* --- Item Type Styling (Keep existing, including Task styling) --- */
-/* ... (heading, note, task, ordered, unordered, hr styles remain mostly the same) ... */
-#outlineContainer li[data-type="task"] > p { display: flex; align-items: baseline; }
-span.task-checkbox { margin-right: 0.5em; cursor: pointer; font-family: monospace; user-select: none; display: inline-block; color: #6c757d; }
-#outlineContainer li[data-type="task"][data-done="true"] > p { text-decoration: line-through; color: #adb5bd; }
-#outlineContainer li[data-type="task"][data-done="true"] > p span.task-checkbox { color: #6c757d; }
-/* Adjust bullet positions if fold triangle is present */
-#outlineContainer li[data-type="unordered"]::before { left: -15px; /* Adjust as needed */ }
+/* Adjust padding for root LIs if root UL has padding */
+#outlineContainer > ul > li {
+    /* If root UL already provides indentation, LI padding might be different */
+     /* padding-left: 18px; */ /* Keep consistent for now */
+}
+#outlineContainer > ul {
+     padding-left: 0; /* Remove base UL padding, control via LI */
+}
 
-/* --- Formatting (Keep existing) --- */
-/* ... (mark, code, a styles remain the same) ... */
 
-/* --- Selection Highlight (Keep existing) --- */
-#outlineContainer li.selected > p { background-color: #cfe2ff; border-color: #9ec5fe; }
-#outlineContainer li[data-type="hr"].selected { outline: 2px solid #9ec5fe; outline-offset: 2px; }
+#outlineContainer li > p:focus {
+    border: 1px dashed #adb5bd;
+    background-color: #f8f9fa;
+}
 
 /* --- Folding --- */
-#outlineContainer li[data-folded="true"] > ul {
+.fold-toggle {
+    position: absolute;
+    left: 0px; /* Position in the padding area */
+    top: 0.35em; /* Align roughly with first line */
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    display: inline-block;
+    color: #6c757d; /* Dim color */
+    font-size: 0.8em;
+    line-height: 1;
+    text-align: center;
+    user-select: none;
+    transition: transform 0.1s ease-in-out;
+}
+
+/* Default: Arrow pointing right (folded or no children) */
+.fold-toggle::before {
+    content: '▶';
+    display: inline-block;
+}
+
+/* Item has children and is NOT folded: Arrow points down */
+li:not([data-folded="true"]) > .fold-toggle::before {
+    transform: rotate(90deg);
+}
+
+/* Hide the nested list when folded */
+li[data-folded="true"] > ul {
     display: none;
 }
 
-/* --- Drag and Drop Styling --- */
-#outlineContainer li.dragging {
-    opacity: 0.4;
-    background: #f0f0f0;
+/* Remove padding and toggle space from LIs that CANNOT have children */
+li[data-type="hr"] {
+    padding-left: 0;
 }
-#outlineContainer li p.drag-over-top::before,
-#outlineContainer li p.drag-over-bottom::after {
-    content: '';
+li[data-type="hr"] .fold-toggle {
+    display: none;
+}
+
+/* --- Item Type Styling --- */
+
+#outlineContainer li[data-type="heading"] > p {
+    font-weight: 600; /* Semibold */
+    font-size: 1.2em;
+    margin-top: 0.7em;
+    margin-bottom: 0.3em;
+    line-height: 1.4;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 3px;
+}
+
+#outlineContainer li[data-type="note"] {
+    color: #495057; /* Slightly darker note text */
+}
+#outlineContainer li[data-type="note"] > p {
+    font-style: italic;
+    background-color: #f1f3f5; /* Light gray note */
+    border-left: 3px solid #adb5bd; /* Gray border */
+    padding-left: 8px; /* Add padding inside the P */
+}
+
+#outlineContainer li[data-type="task"] > p {
+    display: flex; /* Use flex to align checkbox and text */
+    align-items: baseline; /* Align text baseline with checkbox */
+}
+span.task-checkbox {
+    margin-right: 0.5em;
+    cursor: pointer;
+    font-family: monospace; /* Consistent checkbox look */
+    user-select: none; /* Prevent text selection of checkbox */
+    display: inline-block; /* Needed for margin */
+    color: #6c757d; /* Dim checkbox color */
+    /* Ensure checkbox doesn't cause line height issues */
+    line-height: 1;
+    vertical-align: baseline; /* Align with text */
+}
+#outlineContainer li[data-type="task"][data-done="true"] > p {
+    text-decoration: line-through;
+    color: #adb5bd; /* Dim completed task text */
+}
+#outlineContainer li[data-type="task"][data-done="true"] > p span.task-checkbox {
+    color: #6c757d; /* Keep checkbox color consistent when done */
+}
+
+
+#outlineContainer li[data-type="ordered"] {
+    counter-increment: ordered-list-item;
+    /* Adjust left position relative to the toggle space */
+    padding-left: 28px; /* More space needed for number + toggle */
+}
+#outlineContainer li[data-type="ordered"] > .fold-toggle {
+     left: 0; /* Toggle remains at the edge */
+}
+#outlineContainer li[data-type="ordered"] > p::before {
+    content: counter(ordered-list-item) ". ";
     position: absolute;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background-color: #0d6efd; /* Blue indicator line */
-    z-index: 10;
+    left: 18px; /* Position after the toggle space */
+    top: 0.15em; /* Align with text */
+    font-weight: 600;
+    min-width: 1.2em; /* Ensure consistent spacing */
+    display: inline-block;
+    text-align: right;
+    color: #6c757d;
+    padding-right: 0.4em; /* Space between number and text */
 }
-#outlineContainer li p.drag-over-top::before { top: -1px; }
-#outlineContainer li p.drag-over-bottom::after { bottom: -1px; }
-#outlineContainer li p.drag-over-indent { /* Style for dropping inside */
-     background-color: #cfe2ff; /* Light blue background */
-     box-shadow: inset 2px 0 0 #0d6efd; /* Inset blue line */
-}
-
-
-/* --- KaTeX Specific Styling --- */
-.katex-display {
-    overflow-x: auto; /* Allow scrolling for wide equations */
-    overflow-y: hidden;
-    padding: 0.5em 0; /* Add some vertical space around display math */
+/* Reset counter on each new list */
+#outlineContainer ul {
+    counter-reset: ordered-list-item;
 }
 
+#outlineContainer li[data-type="unordered"]::before {
+    content: '•';
+    position: absolute;
+    left: 18px; /* Position after the toggle space */
+    top: 0.4em; /* Adjust vertical alignment */
+    color: #6c757d;
+    line-height: 1;
+}
+#outlineContainer ul ul li[data-type="unordered"]::before { content: '◦'; }
+#outlineContainer ul ul ul li[data-type="unordered"]::before { content: '▪'; }
 
-/* --- Mobile Responsiveness (Keep existing, adjust maybe) --- */
-@media (max-width: 768px) {
-    header { padding: 8px 10px; }
-    .header-main { flex-direction: column; align-items: flex-start; gap: 4px; margin-bottom: 5px; }
-    header h1 { font-size: 1.2em; }
-     #currentFileName { max-width: 100%; text-align: left; font-size: 0.85em; }
-    .file-actions { gap: 5px; } .action-group { gap: 4px; }
-    header button, .file-input-label { padding: 4px 8px; font-size: 0.85em; }
-    #toolbar { padding: 5px 10px; }
-    #toolbar button { padding: 3px 6px; min-width: 28px; font-size: 0.95em; }
+
+#outlineContainer li[data-type="hr"] > p { display: none; }
+#outlineContainer li[data-type="hr"] {
+    height: 1px;
+    background-color: #dee2e6;
+    margin: 1.3em 0;
+    list-style: none;
+    padding: 0; /* Remove padding */
+    position: relative; /* Keep for selection outline */
+}
+#outlineContainer li[data-type="hr"]::before { content: none; } /* Ensure no bullet */
+
+/* --- Formatting --- */
+mark {
+    background-color: #fff3cd; /* Bootstrap yellow */
+    padding: 0.1em 0.2em;
+    border-radius: 2px;
+    color: #59480b;
+}
+code {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    background-color: #e9ecef;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+    font-size: 0.9em;
+    color: #c7254e; /* Pinkish code color */
+    /* Ensure code doesn't affect line height drastically */
+    line-height: 1;
+    vertical-align: baseline;
+}
+a { color: #0d6efd; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* --- Selection Highlight --- */
+#outlineContainer li.selected > p {
+    background-color: #cfe2ff; /* Bootstrap info light */
+    border-color: #9ec5fe;
+}
+#outlineContainer li[data-type="hr"].selected {
+     outline: 2px solid #9ec5fe;
+     outline-offset: 2px;
+}
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) { /* Standard bootstrap breakpoint */
+    header {
+        padding: 8px 10px; /* Reduce padding */
+    }
+    .header-main {
+        flex-direction: column; /* Stack title and filename */
+        align-items: flex-start;
+        gap: 4px;
+        margin-bottom: 5px;
+    }
+    header h1 {
+        font-size: 1.2em;
+    }
+     #currentFileName {
+        max-width: 100%; /* Allow full width */
+        text-align: left;
+        font-size: 0.85em;
+    }
+    .file-actions {
+        gap: 5px; /* Reduce gap between groups */
+        justify-content: flex-start; /* Align groups left */
+    }
+    .action-group {
+        gap: 4px; /* Reduce gap within groups */
+         /* Allow groups themselves to wrap if needed */
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+    header button, .file-input-label {
+        padding: 4px 8px; /* Smaller buttons */
+        font-size: 0.85em;
+    }
+
+    #toolbar {
+        padding: 5px 10px;
+        justify-content: flex-start;
+        /* Optional: Enable horizontal scrolling for toolbar */
+        /* overflow-x: auto; */
+        /* white-space: nowrap; */
+    }
+    #toolbar button {
+         padding: 3px 6px;
+         min-width: 28px;
+         font-size: 0.95em;
+    }
     #toolbar hr { margin: 0 2px; }
-     #outlineContainer ul { padding-left: 22px; } /* Adjust for fold icon */
-     #outlineContainer ul ul { padding-left: 22px; }
-     .fold-triangle { left: -19px; } /* Position fold icon */
-     #outlineContainer li[data-type="unordered"]::before { left: -14px; } /* Adjust bullet */
+
+    /* Reduce indentation */
+     #outlineContainer ul { padding-left: 0; } /* Remove UL padding */
+     #outlineContainer li { padding-left: 16px; } /* Reduce LI padding */
+     .fold-toggle { left: 0px; top: 0.4em; font-size: 0.75em;}
+     #outlineContainer li[data-type="unordered"]::before { left: 16px; top: 0.45em; }
+     #outlineContainer li[data-type="ordered"] { padding-left: 26px; } /* Adjust ordered padding */
+     #outlineContainer li[data-type="ordered"] > p::before { left: 16px; top: 0.2em; }
+
+
      main#outlineContainer { padding: 10px; line-height: 1.55; }
      #outlineContainer li > p { padding: 1px 4px; min-height: 1.55em; }
 }
+
 @media (max-width: 480px) {
      header h1 { font-size: 1.1em; }
      header button, .file-input-label { font-size: 0.8em; padding: 3px 6px; }
      #toolbar button { font-size: 0.9em; min-width: 26px; padding: 2px 5px;}
-     #outlineContainer ul { padding-left: 20px; }
-     #outlineContainer ul ul { padding-left: 20px; }
-     .fold-triangle { left: -18px; font-size: 0.75em; }
-     #outlineContainer li[data-type="unordered"]::before { left: -13px; }
+     #outlineContainer li { padding-left: 14px; }
+     .fold-toggle { left: -2px; top: 0.45em; } /* Adjust toggle position slightly */
+     #outlineContainer li[data-type="unordered"]::before { left: 14px; }
+     #outlineContainer li[data-type="ordered"] { padding-left: 24px; }
+     #outlineContainer li[data-type="ordered"] > p::before { left: 14px; }
 }
