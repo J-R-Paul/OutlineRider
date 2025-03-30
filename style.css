@@ -225,6 +225,28 @@ main#outlineContainer {
     background-color: #f8f9fa;
 }
 
+/* --- Drag and Drop Styling --- */
+#outlineContainer li[draggable="true"] {
+    cursor: grab;
+}
+
+#outlineContainer li.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+#outlineContainer li.drop-target-inside {
+    background-color: rgba(13, 110, 253, 0.1);
+    border-radius: 3px;
+    outline: 2px dashed rgba(13, 110, 253, 0.4);
+    outline-offset: 2px;
+}
+
+.drop-indicator {
+    border-radius: 2px;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
 /* --- Folding --- */
 .fold-toggle {
     position: absolute;

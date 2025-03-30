@@ -32,6 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDirty = false;
     let opfsIsInitialized = false;
     let isLoading = false; // Global loading flag
+    let currentlyDraggedLi = null;
+    let dragDropIndicator = null;
+    let lastDropTarget = null;
+    let lastDropPosition = null;
 
 
     // --- Constants ---
@@ -661,6 +665,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const childUl = li.querySelector(':scope > ul');
             addFoldingToggle(li, !!childUl);
 
+            // Make the item draggable (excluding horizontal rules)
+            if (li.getAttribute('data-type') !== 'hr') {
+                li.setAttribute('draggable', 'true');
+                setupDragListeners(li);
+            }
+
             if (li.getAttribute('data-type') === 'hr') {
                 if (p) p.remove(); li.tabIndex = -1;
             } else if (!p) {
@@ -1116,6 +1126,266 @@ document.addEventListener('DOMContentLoaded', () => {
          else if (rootUlElement?.firstElementChild) { const firstItem = rootUlElement.querySelector('li'); if (firstItem) { console.log("Selecting first item as fallback after deletion."); selectAndFocusItem(firstItem, true); } else { console.warn("Outline not empty but couldn't find item to select, resetting."); resetEditorState('empty'); } }
          else { console.warn("Root UL not found after deletion, resetting."); resetEditorState('empty'); }
          handleContentChange();
+    }
+
+    // --- Drag and Drop Implementation ---
+    function setupDragListeners(li) {
+        li.addEventListener('dragstart', handleDragStart);
+        li.addEventListener('dragend', handleDragEnd);
+        li.addEventListener('dragover', handleDragOver);
+        li.addEventListener('dragenter', handleDragEnter);
+        li.addEventListener('dragleave', handleDragLeave);
+        li.addEventListener('drop', handleDrop);
+    }
+    
+    function handleDragStart(e) {
+        if (isLoading || !outlineContainer.contains(e.target) || e.target.getAttribute('data-type') === 'hr') {
+            e.preventDefault();
+            return false;
+        }
+        
+        currentlyDraggedLi = e.target.closest('li');
+        if (!currentlyDraggedLi) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Create a simple drag image
+        const ghost = currentlyDraggedLi.cloneNode(true);
+        ghost.style.opacity = '0.5';
+        ghost.style.position = 'absolute';
+        ghost.style.top = '-1000px';
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 0, 0);
+        
+        // Clean up the ghost element after a short delay
+        setTimeout(() => {
+            document.body.removeChild(ghost);
+        }, 0);
+        
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', currentlyDraggedLi.id);
+        currentlyDraggedLi.classList.add('dragging');
+        
+        // Create a drop indicator if it doesn't exist yet
+        if (!dragDropIndicator) {
+            dragDropIndicator = document.createElement('div');
+            dragDropIndicator.className = 'drop-indicator';
+            dragDropIndicator.style.position = 'absolute';
+            dragDropIndicator.style.height = '3px';
+            dragDropIndicator.style.backgroundColor = '#0d6efd';
+            dragDropIndicator.style.zIndex = '1000';
+            dragDropIndicator.style.pointerEvents = 'none';
+            dragDropIndicator.style.display = 'none';
+            document.body.appendChild(dragDropIndicator);
+        }
+        
+        console.log(`Started dragging: ${currentlyDraggedLi.id}`);
+    }
+    
+    function handleDragOver(e) {
+        if (!currentlyDraggedLi) return;
+        e.preventDefault(); // Allow drop
+        e.dataTransfer.dropEffect = 'move';
+        
+        const dropTarget = e.target.closest('li');
+        if (!dropTarget || !outlineContainer.contains(dropTarget) || dropTarget === currentlyDraggedLi) {
+            hideDropIndicator();
+            return;
+        }
+        
+        // Calculate drop position (before, after, inside)
+        const rect = dropTarget.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const relativeY = mouseY - rect.top;
+        const height = rect.height;
+        
+        let dropPosition;
+        if (relativeY < height * 0.25) {
+            // Drop before
+            dropPosition = 'before';
+        } else if (relativeY > height * 0.75) {
+            // Drop after
+            dropPosition = 'after';
+        } else {
+            // Drop inside as child
+            dropPosition = 'inside';
+        }
+        
+        // Check if we're trying to drop an item inside itself or its descendants
+        if (dropPosition === 'inside' && isDescendantOf(dropTarget, currentlyDraggedLi)) {
+            hideDropIndicator();
+            return;
+        }
+        
+        // Update the last target and position
+        lastDropTarget = dropTarget;
+        lastDropPosition = dropPosition;
+        
+        // Show visual indicator based on drop position
+        showDropIndicator(dropTarget, dropPosition);
+    }
+    
+    function handleDragEnter(e) {
+        if (!currentlyDraggedLi) return;
+        e.preventDefault();
+    }
+    
+    function handleDragLeave(e) {
+        if (!currentlyDraggedLi) return;
+        const relatedTarget = e.relatedTarget;
+        if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+            hideDropIndicator();
+        }
+    }
+    
+    function handleDrop(e) {
+        if (!currentlyDraggedLi) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const dropTarget = lastDropTarget;
+        const dropPosition = lastDropPosition;
+        
+        if (!dropTarget || !outlineContainer.contains(dropTarget) || !dropPosition) {
+            hideDropIndicator();
+            return;
+        }
+        
+        // Don't drop on self or if trying to drop parent inside child
+        if (dropTarget === currentlyDraggedLi || 
+            (dropPosition === 'inside' && isDescendantOf(dropTarget, currentlyDraggedLi))) {
+            hideDropIndicator();
+            return;
+        }
+        
+        console.log(`Dropping ${currentlyDraggedLi.id} ${dropPosition} ${dropTarget.id}`);
+        
+        // Perform the move
+        const moved = moveItemToTarget(currentlyDraggedLi, dropTarget, dropPosition);
+        
+        // Clean up
+        hideDropIndicator();
+        
+        if (moved) {
+            selectAndFocusItem(currentlyDraggedLi, false);
+            handleContentChange(); // Mark as dirty
+        }
+    }
+    
+    function handleDragEnd(e) {
+        if (!currentlyDraggedLi) return;
+        currentlyDraggedLi.classList.remove('dragging');
+        hideDropIndicator();
+        currentlyDraggedLi = null;
+        lastDropTarget = null;
+        lastDropPosition = null;
+    }
+    
+    function moveItemToTarget(draggedItem, targetItem, position) {
+        if (!draggedItem || !targetItem || !outlineContainer.contains(draggedItem) || 
+            !outlineContainer.contains(targetItem)) {
+            return false;
+        }
+        
+        try {
+            const parentUl = draggedItem.parentElement;
+            
+            switch (position) {
+                case 'before':
+                    targetItem.parentElement.insertBefore(draggedItem, targetItem);
+                    break;
+                case 'after':
+                    if (targetItem.nextElementSibling) {
+                        targetItem.parentElement.insertBefore(draggedItem, targetItem.nextElementSibling);
+                    } else {
+                        targetItem.parentElement.appendChild(draggedItem);
+                    }
+                    break;
+                case 'inside':
+                    // Need to add as first child
+                    let targetUl = targetItem.querySelector(':scope > ul');
+                    if (!targetUl) {
+                        targetUl = document.createElement('ul');
+                        targetItem.appendChild(targetUl);
+                    }
+                    targetUl.insertBefore(draggedItem, targetUl.firstChild);
+                    
+                    // Add folding toggle if not already there
+                    addFoldingToggle(targetItem, true);
+                    
+                    // Unfold the target if it was folded
+                    if (targetItem.getAttribute('data-folded') === 'true') {
+                        targetItem.removeAttribute('data-folded');
+                    }
+                    break;
+            }
+            
+            // Check if old parent UL is now empty and clean up if needed
+            if (parentUl && parentUl !== rootUlElement && parentUl.children.length === 0) {
+                const parentLi = parentUl.closest('li');
+                if (parentLi) {
+                    parentUl.remove();
+                    addFoldingToggle(parentLi, false);
+                }
+            }
+            
+            return true;
+            
+        } catch (err) {
+            console.error('Error during drag and drop move:', err);
+            return false;
+        }
+    }
+    
+    function showDropIndicator(target, position) {
+        if (!dragDropIndicator || !target) return;
+        
+        const rect = target.getBoundingClientRect();
+        dragDropIndicator.style.width = `${rect.width}px`;
+        
+        switch (position) {
+            case 'before':
+                dragDropIndicator.style.left = `${rect.left}px`;
+                dragDropIndicator.style.top = `${rect.top - 2}px`;
+                dragDropIndicator.style.display = 'block';
+                break;
+            case 'after':
+                dragDropIndicator.style.left = `${rect.left}px`;
+                dragDropIndicator.style.top = `${rect.bottom - 1}px`;
+                dragDropIndicator.style.display = 'block';
+                break;
+            case 'inside':
+                dragDropIndicator.style.display = 'none';
+                target.classList.add('drop-target-inside');
+                break;
+        }
+        
+        // Remove inside highlighting from previous targets
+        document.querySelectorAll('.drop-target-inside').forEach(el => {
+            if (el !== target) el.classList.remove('drop-target-inside');
+        });
+    }
+    
+    function hideDropIndicator() {
+        if (dragDropIndicator) {
+            dragDropIndicator.style.display = 'none';
+        }
+        // Remove any inside highlighting
+        document.querySelectorAll('.drop-target-inside').forEach(el => {
+            el.classList.remove('drop-target-inside');
+        });
+        lastDropTarget = null;
+        lastDropPosition = null;
+    }
+    
+    function isDescendantOf(child, parent) {
+        let node = child.parentElement;
+        while (node) {
+            if (node === parent) return true;
+            node = node.parentElement;
+        }
+        return false;
     }
 
     // --- Utility ---
