@@ -3,32 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bike File Editor (Web)</title> <!-- Slightly different title -->
+    <title>Bike Editor Pro</title> <!-- Updated title -->
     <link rel="stylesheet" href="style.css">
-    <!-- Add basic PWA manifest link and icons if desired for homescreen saving -->
-    <!-- <link rel="manifest" href="manifest.json"> -->
-    <!-- <link rel="apple-touch-icon" href="icons/icon-192x192.png"> -->
+    <!-- Optional: Add PWA manifest/icons here -->
 </head>
 <body>
     <header>
-        <h1>Bike File Editor (Web)</h1>
-        <!-- File Handling Options -->
-        <div>
-            <label for="fileInput">Load (Copy from Device):</label>
-            <input type="file" id="fileInput"
-                   accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
-                   aria-label="Load Bike File (Creates Copy)">
+        <div class="header-main">
+             <h1>Bike Editor Pro</h1>
+             <span id="currentFileName" title="Currently open file">No file open</span>
         </div>
-        <!-- OPFS Buttons - Shown only if API is supported -->
-        <div id="opfsFileAccess" style="display: none;">
-             <button id="manageOpfsButton" title="Open or manage files saved within this app's storage">Manage App Files</button>
-             <span id="currentFileName">No file open</span>
-             <button id="saveToOpfsButton" disabled title="Save changes to the file currently open in app storage">Save to App Storage</button>
-        </div>
-        <!-- Standard Download Button -->
-        <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
-        <button id="clearLocalButton" title="Clear the temporary draft saved in your browser storage">Clear Temp Draft</button>
 
+        <div class="file-actions">
+            <!-- Standard File System Access (Direct Edit) -->
+            <div class="action-group" id="directFileAccess" style="display: none;">
+                <button id="openDirectButton" title="Open file from device for direct editing (Chrome/Edge)">Open (Direct Edit)</button>
+                <button id="saveDirectButton" disabled title="Save changes directly to the opened file (Chrome/Edge)">Save Directly</button>
+            </div>
+
+             <!-- OPFS (Safari/iOS App Storage) -->
+            <div class="action-group" id="opfsFileAccess" style="display: none;">
+                 <button id="manageOpfsButton" title="Open/Manage files saved within this app's private storage (Safari/iOS)">Manage App Files</button>
+                 <button id="saveToOpfsButton" disabled title="Save changes to the file in app storage">Save to App Storage</button>
+            </div>
+
+            <!-- General Load/Save -->
+            <div class="action-group">
+                <label for="fileInput" class="file-input-label" title="Load a copy of a file from your device">
+                    Load Copy
+                    <input type="file" id="fileInput"
+                           accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
+                           aria-label="Load Bike File (Creates Copy)">
+                </label>
+                 <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
+                 <button id="clearLocalButton" title="Clear the temporary draft saved in browser storage">Clear Temp Draft</button>
+            </div>
+        </div>
     </header>
 
     <div id="toolbar">
@@ -37,40 +47,41 @@
         <button class="format-button" data-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
         <button class="format-button" data-command="code" title="Code">{}</button>
         <button class="format-button" data-command="highlight" title="Highlight">H</button>
-        <button id="linkButton" title="Create Link">Link</button>
+        <button id="linkButton" title="Create Link (Ctrl+K)">Link</button>
         <hr>
         <!-- Item Type Buttons -->
-        <button class="type-button" data-type="heading" title="Heading">Heading</button>
-        <button class="type-button" data-type="note" title="Note">Note</button>
-        <button class="type-button" data-type="task" title="Task">Task</button>
-        <button class="type-button" data-type="ordered" title="Ordered List Item">Ordered</button>
-        <button class="type-button" data-type="unordered" title="Unordered List Item">Unordered</button>
-        <button class="type-button" data-type="hr" title="Horizontal Rule">HR</button>
-        <button class="type-button" data-type="" title="Plain Text">Plain</button> <!-- Empty data-type for default -->
+        <button class="type-button" data-type="heading" title="Heading">H</button>
+        <button class="type-button" data-type="note" title="Note">N</button>
+        <button class="type-button" data-type="task" title="Task">T</button>
+        <button class="type-button" data-type="ordered" title="Ordered List Item">1.</button>
+        <button class="type-button" data-type="unordered" title="Unordered List Item">•</button>
+        <button class="type-button" data-type="hr" title="Horizontal Rule">—</button>
+        <button class="type-button" data-type="" title="Plain Text">P</button> <!-- Empty data-type for default -->
         <hr>
         <!-- Outline Operation Buttons -->
-        <button id="indentButton" title="Indent (Tab)">Indent</button>
-        <button id="outdentButton" title="Outdent (Shift+Tab)">Outdent</button>
-        <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">Move Up</button>
-        <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">Move Down</button>
-        <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">Delete</button>
+        <button id="indentButton" title="Indent (Tab)">→</button>
+        <button id="outdentButton" title="Outdent (Shift+Tab)">←</button>
+        <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">↑</button>
+        <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">↓</button>
+        <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">✕</button>
     </div>
 
-    <main id="outlineContainer" tabindex="0"> <!-- Add tabindex to make container focusable -->
-        <!-- Initial Instructions -->
+    <main id="outlineContainer" tabindex="0">
         <div id="initialMessage">
-            <p>Welcome! Choose an option:</p>
+            <p>Welcome to Bike Editor Pro!</p>
+            <p>Choose how to start:</p>
             <ul>
-                <li><b>Load (Copy from Device):</b> Open a .bike or .html file from your computer/phone. Changes are not saved back automatically. Use "Save As / Download" to get a copy.</li>
-                <li id="opfsInfo" style="display: none;"><b>Manage App Files:</b> Open, create, or delete files stored privately by this web app in your browser (ideal for Safari/iOS).</li>
-                <li><b>Save As / Download:</b> Download the current outline as a file.</li>
-                <li><b>Clear Temp Draft:</b> Remove the auto-saved draft from browser storage.</li>
+                <li id="directInfo" style="display: none;"><b>Open (Direct Edit):</b> Edit files directly on your device (Chrome/Edge recommended).</li>
+                <li id="opfsInfo" style="display: none;"><b>Manage App Files:</b> Use private app storage, ideal for Safari/iOS persistence.</li>
+                <li><b>Load Copy:</b> Open a temporary copy from your device (use 'Save As' to keep changes).</li>
             </ul>
-            <p><b>Editing Basics:</b> Use <b>Enter</b> for new item, <b>Shift+Enter</b> for line break, <b>Tab</b> to indent, <b>Shift+Tab</b> to outdent.</p>
+             <p><b>Editing:</b> Enter=New Item, Shift+Enter=Line Break, Tab=Indent, Shift+Tab=Outdent.</p>
+             <p>Click task checkboxes <span class="task-example">☐</span> to mark done.</p>
         </div>
     </main>
 
-    <script src="worker.js" defer></script> <!-- Load worker script -->
+    <!-- Worker should be loaded before main script if possible, using defer helps -->
+    <script src="worker.js" defer></script>
     <script src="script.js"></script>
 </body>
 </html>
