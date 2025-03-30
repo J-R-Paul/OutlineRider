@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastDropTarget = null;
     let lastDropPosition = null;
     let katexInitialized = typeof katex !== 'undefined'; // Check if KaTeX is available
+    let keyboardVisible = false;
+    let viewportHandler = null;
+    let toolbarOriginalPosition = null;
 
 
     // --- Constants ---
@@ -152,10 +155,136 @@ document.addEventListener('DOMContentLoaded', () => {
               }
         }
 
+        // Set up keyboard detection and toolbar positioning
+        setupViewportHandling();
+
          updateFileStateUI(); // Final UI update
 
-         window.addEventListener('beforeunload', (event) => { /* ... beforeunload logic ... */ });
+         window.addEventListener('beforeunload', (event) => { 
+             /* ... beforeunload logic ... */ 
+             cleanupViewportHandling();
+         });
          console.log("Initialization complete.");
+    }
+
+    // --- Mobile Keyboard Detection and Toolbar Positioning ---
+    function setupViewportHandling() {
+        const toolbar = document.getElementById('toolbar');
+        // Store original CSS position for restoring later
+        toolbarOriginalPosition = {
+            position: window.getComputedStyle(toolbar).position,
+            bottom: window.getComputedStyle(toolbar).bottom
+        };
+        
+        if ('visualViewport' in window) {
+            console.log('Visual Viewport API detected, setting up keyboard detection');
+            
+            // Create handler function
+            viewportHandler = () => {
+                // On mobile devices, when keyboard appears, the visual viewport height becomes smaller
+                // than the layout viewport height (window.innerHeight)
+                const viewportHeight = window.visualViewport.height;
+                const windowHeight = window.innerHeight;
+                
+                // If visual viewport is significantly smaller than window height, keyboard is likely visible
+                const heightDifference = windowHeight - viewportHeight;
+                const threshold = windowHeight * 0.15; // 15% difference threshold
+                
+                const keyboardIsVisible = heightDifference > threshold;
+                
+                if (keyboardIsVisible !== keyboardVisible) {
+                    keyboardVisible = keyboardIsVisible;
+                    adjustToolbarPosition(keyboardIsVisible);
+                }
+            };
+            
+            // Register handler for resize and scroll events on visualViewport
+            window.visualViewport.addEventListener('resize', viewportHandler);
+            window.visualViewport.addEventListener('scroll', viewportHandler);
+            
+            // Run once on initialization
+            viewportHandler();
+        } else {
+            console.log('Visual Viewport API not supported, using fallback method');
+            // Fallback for browsers without visualViewport API
+            document.body.addEventListener('focusin', event => {
+                if (event.target.isContentEditable || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                    document.body.classList.add('keyboard-open');
+                    adjustToolbarPosition(true);
+                }
+            });
+            
+            document.body.addEventListener('focusout', event => {
+                if (event.target.isContentEditable || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                    // Small delay to ensure we're not just focusing on another input
+                    setTimeout(() => {
+                        const activeElement = document.activeElement;
+                        if (!(activeElement.isContentEditable || activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                            document.body.classList.remove('keyboard-open');
+                            adjustToolbarPosition(false);
+                        }
+                    }, 100);
+                }
+            });
+        }
+
+        // Additional detection for iOS Safari keyboard
+        window.addEventListener('resize', () => {
+            if (window.innerWidth === document.documentElement.clientWidth) {
+                // No change in width but height changed - likely keyboard
+                const heightChanged = window.innerHeight !== document.documentElement.clientHeight;
+                if (heightChanged) {
+                    const keyboardLikelyVisible = window.innerHeight < window.outerHeight * 0.8;
+                    if (keyboardLikelyVisible !== keyboardVisible) {
+                        keyboardVisible = keyboardLikelyVisible;
+                        adjustToolbarPosition(keyboardLikelyVisible);
+                    }
+                }
+            }
+        });
+    }
+
+    // Function to adjust toolbar position based on keyboard visibility
+    function adjustToolbarPosition(keyboardIsVisible) {
+        const toolbar = document.getElementById('toolbar');
+        
+        if (keyboardIsVisible) {
+            document.body.classList.add('keyboard-open');
+            
+            if (window.visualViewport) {
+                // Position toolbar at the bottom of the current visual viewport
+                toolbar.style.position = 'fixed';
+                toolbar.style.bottom = '0px';
+                // Add iOS safe area inset if available
+                if (window.CSS && CSS.supports('padding-bottom: env(safe-area-inset-bottom)')) {
+                    toolbar.style.paddingBottom = 'env(safe-area-inset-bottom, 8px)';
+                }
+            }
+            
+            console.log('Keyboard detected as open, repositioning toolbar');
+        } else {
+            document.body.classList.remove('keyboard-open');
+            
+            // Restore original position
+            if (toolbarOriginalPosition) {
+                toolbar.style.position = toolbarOriginalPosition.position;
+                toolbar.style.bottom = toolbarOriginalPosition.bottom;
+            } else {
+                toolbar.style.position = '';
+                toolbar.style.bottom = '';
+            }
+            
+            console.log('Keyboard detected as closed, resetting toolbar position');
+        }
+    }
+
+    // Add cleanup function
+    function cleanupViewportHandling() {
+        if (viewportHandler && 'visualViewport' in window) {
+            window.visualViewport.removeEventListener('resize', viewportHandler);
+            window.visualViewport.removeEventListener('scroll', viewportHandler);
+            viewportHandler = null;
+        }
     }
 
     // --- Event Listeners ---
@@ -1496,7 +1625,8 @@ document.addEventListener('DOMContentLoaded', () => {
         grandparentLi.after(li);
         addFoldingToggle(li, !!li.querySelector(':scope > ul > li'));
         const oldParentIsEmpty = parentUl.children.length === 0;
-        if (oldParentIsEmpty) { console.log(`Removing empty parent UL from ${grandparentLi.id}`); parentUl.remove(); }
+        if (oldParentIsEmpty) { console.log(`Removing empty parent UL from ${grandparentLi.id}`); parentUl.remove(); addFoldingToggle(grandparentLi, false);
+        }
         addFoldingToggle(grandparentLi, !!grandparentLi.querySelector(':scope > ul > li'));
         selectAndFocusItem(li, false); handleContentChange();
         if (originalGrandparentUl) makeEditableAndInteractive(originalGrandparentUl);

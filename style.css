@@ -510,11 +510,24 @@ a:hover { text-decoration: underline; }
         z-index: 1000; /* Ensure it's above everything */
         /* Handle iOS Safari's bottom UI elements */
         padding-bottom: env(safe-area-inset-bottom, 8px);
+        
+        /* Add transition for smooth repositioning */
+        transition: transform 0.2s ease-out, bottom 0.2s ease-out;
+        will-change: transform, bottom;
+    }
+    
+    /* Add styles for when keyboard is detected as open */
+    body.keyboard-open #toolbar {
+        /* We'll let JavaScript set positioning dynamically */
+        background-color: rgba(248, 249, 250, 0.98); /* Slightly more opaque when over keyboard */
+        /* Ensure toolbar stays above keyboard */
+        transform: translateY(0) !important;
+        bottom: 0 !important;
     }
     
     main#outlineContainer {
         /* Add padding to prevent content from being hidden behind the fixed toolbar */
-        padding-bottom: 60px; /* Approximate height of the toolbar + some extra space */
+        padding-bottom: 70px; /* Approximate height of the toolbar + some extra space */
     }
 
     #toolbar button {
@@ -538,6 +551,34 @@ a:hover { text-decoration: underline; }
 
      main#outlineContainer { padding: 10px; line-height: 1.55; }
      #outlineContainer li > p { padding: 1px 4px; min-height: 1.55em; }
+}
+
+/* Special case for mobile devices with virtual keyboard visible */
+@media (max-height: 450px) and (max-width: 768px) {
+    #toolbar {
+        /* When virtual keyboard is likely open (small height), make toolbar more compact */
+        padding: 4px 8px;
+    }
+    
+    #toolbar button {
+        /* Smaller buttons when keyboard is open */
+        min-width: 24px;
+        padding: 2px 4px;
+    }
+    
+    body.keyboard-open main#outlineContainer {
+        /* Adjust content padding when keyboard is open */
+        padding-bottom: 50px;
+    }
+}
+
+/* Add improved fallback for browsers without visualViewport API */
+@media (max-width: 768px) {
+    body.keyboard-open #toolbar {
+        position: fixed;
+        bottom: 0 !important;
+        z-index: 1000;
+    }
 }
 
 @media (max-width: 480px) {
