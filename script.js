@@ -384,7 +384,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return success;
     }
 
-    function fixFileName(name, defaultExt = '.bike') { /* ... (no changes) ... */ }
+    function fixFileName(name, defaultExt = '.bike') {
+        if (!name) return `outline${defaultExt}`;
+        
+        // Make sure we have a string
+        name = String(name);
+        
+        // Remove invalid filename characters
+        const invalidChars = /[\\/:*?"<>|]/g;
+        name = name.replace(invalidChars, '');
+        
+        // Ensure it ends with the correct extension
+        if (!name.toLowerCase().endsWith(defaultExt.toLowerCase())) {
+            // Remove any existing extension
+            name = name.replace(/\.[^/.]+$/, '');
+            name += defaultExt;
+        }
+        
+        // Provide a fallback if name is empty after cleaning
+        if (!name || name === defaultExt) {
+            name = `outline${defaultExt}`;
+        }
+        
+        return name;
+    }
 
     function saveFileAsDownload() {
         console.log("Attempting to save file as download...");
@@ -416,10 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Ensure .bike extension
-        if (!suggestedName.toLowerCase().endsWith('.bike')) {
-            suggestedName = fixFileName(suggestedName, '.bike');
-        }
+        // Ensure .bike extension using the fixFileName function
+        suggestedName = fixFileName(suggestedName, '.bike');
+        console.log(`Saving as: ${suggestedName}`);
         
         // Create blob for download
         const blob = new Blob([htmlContent], { type: 'application/xhtml+xml' });
@@ -472,9 +494,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!opfsRoot) return alert("App Storage (OPFS) is not available.");
         if (isLoading) { console.warn("Create new rejected, already loading."); return; }
 
-        if (!await checkUnsavedChanges("create a new file in App Storage")) {
-             console.log("New App File cancelled due to unsaved changes.");
-             return;
+        // Check if we have content loaded that would be discarded
+        const hasContent = rootUlElement && outlineContainer.contains(rootUlElement);
+        
+        // Always warn if we have any content, not just unsaved changes
+        if (hasContent) {
+            const message = isDirty 
+                ? "You have unsaved changes. Are you sure you want to create a new file in App Storage and discard them?"
+                : "Creating a new file will discard your current content. Are you sure you want to proceed?";
+                
+            if (!confirm(message)) {
+                console.log("New App File cancelled due to user choice.");
+                return;
+            }
         }
 
         isLoading = true; // Set loading flag for this operation
