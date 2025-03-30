@@ -3,40 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bike Editor Pro</title> <!-- Updated title -->
+    <title>Bike Editor Pro</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Optional: Add PWA manifest/icons here -->
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Optional: Theme color for PWA -->
+    <meta name="theme-color" content="#e9ecef"/>
+    <!-- Optional: iOS specific tags for standalone appearance -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="BikeEditor">
+    <!-- Optional: Link iOS icons if needed -->
+    <!-- <link rel="apple-touch-icon" href="icon-192.png"> -->
+
 </head>
 <body>
     <header>
         <div class="header-main">
              <h1>Bike Editor Pro</h1>
-             <span id="currentFileName" title="Currently open file">No file open</span>
+             <span id="currentFileName" title="Current working file source">No file</span>
         </div>
 
         <div class="file-actions">
             <!-- Standard File System Access (Direct Edit) -->
             <div class="action-group" id="directFileAccess" style="display: none;">
-                <button id="openDirectButton" title="Open file from device for direct editing (Chrome/Edge)">Open (Direct Edit)</button>
-                <button id="saveDirectButton" disabled title="Save changes directly to the opened file (Chrome/Edge)">Save Directly</button>
+                <button id="openDirectButton" title="Open & edit a file directly on your device (Chrome/Edge)">Open Direct</button>
+                <button id="saveDirectButton" disabled title="Save changes directly to the opened file (Chrome/Edge)">Save Direct</button>
             </div>
 
-             <!-- OPFS (Safari/iOS App Storage) -->
+             <!-- OPFS (Persistent App Storage) -->
             <div class="action-group" id="opfsFileAccess" style="display: none;">
-                 <button id="manageOpfsButton" title="Open/Manage files saved within this app's private storage (Safari/iOS)">Manage App Files</button>
-                 <button id="saveToOpfsButton" disabled title="Save changes to the file in app storage">Save to App Storage</button>
+                 <button id="newAppFileButton" title="Start a new empty file in App Storage (warns if unsaved changes)">New App File</button>
+                 <button id="saveToOpfsButton" disabled title="Save current content to persistent App Storage (overwrites previous)">Save to App</button>
             </div>
 
             <!-- General Load/Save -->
             <div class="action-group">
-                <label for="fileInput" class="file-input-label" title="Load a copy of a file from your device">
+                <label for="fileInput" class="file-input-label" title="Load content from a file (will overwrite App Storage on next save)">
                     Load Copy
                     <input type="file" id="fileInput"
                            accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
                            aria-label="Load Bike File (Creates Copy)">
                 </label>
                  <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
-                 <button id="clearLocalButton" title="Clear the temporary draft saved in browser storage">Clear Temp Draft</button>
+                 <!-- Removed Clear Temp Draft Button -->
             </div>
         </div>
     </header>
@@ -64,6 +74,7 @@
         <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">↑</button>
         <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">↓</button>
         <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">✕</button>
+        <!-- Add fold/unfold all button? Maybe later -->
     </div>
 
     <main id="outlineContainer" tabindex="0">
@@ -71,17 +82,19 @@
             <p>Welcome to Bike Editor Pro!</p>
             <p>Choose how to start:</p>
             <ul>
-                <li id="directInfo" style="display: none;"><b>Open (Direct Edit):</b> Edit files directly on your device (Chrome/Edge recommended).</li>
-                <li id="opfsInfo" style="display: none;"><b>Manage App Files:</b> Use private app storage, ideal for Safari/iOS persistence.</li>
-                <li><b>Load Copy:</b> Open a temporary copy from your device (use 'Save As' to keep changes).</li>
+                <li id="directInfo" style="display: none;"><b>Open Direct:</b> Edit files directly on your device (Chrome/Edge). Changes saved here are separate from App Storage.</li>
+                <li id="opfsInfo" style="display: none;"><b>New App File:</b> Start fresh. Content is automatically saved in this app's private storage when you click 'Save to App'.</li>
+                <li id="opfsInfo2" style="display: none;"><b>(Auto-Load):</b> If you previously saved to App Storage, your last session is loaded automatically.</li>
+                <li><b>Load Copy:</b> Open content from a device file. Use 'Save to App' to make it persistent here, or 'Save As' to download.</li>
             </ul>
              <p><b>Editing:</b> Enter=New Item, Shift+Enter=Line Break, Tab=Indent, Shift+Tab=Outdent.</p>
-             <p>Click task checkboxes <span class="task-example">☐</span> to mark done.</p>
+             <p>Click task checkboxes <span class="task-example">☐</span> to mark done. Click triangles ▶ to fold/unfold items.</p>
         </div>
     </main>
 
-    <!-- Worker should be loaded before main script if possible, using defer helps -->
+    <!-- Worker script -->
     <script src="worker.js" defer></script>
+    <!-- Main script -->
     <script src="script.js"></script>
 </body>
 </html>
