@@ -382,6 +382,47 @@ span.task-checkbox {
 }
 #outlineContainer li[data-type="hr"]::before { content: none; } /* Ensure no bullet */
 
+/* --- LaTeX Block Styling --- */
+#outlineContainer li[data-type="latex"] {
+    padding-left: 0;
+    margin: 0.8em 0;
+}
+
+#outlineContainer li[data-type="latex"] > p {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: monospace;
+    min-height: 2em;
+    color: #495057;
+}
+
+#outlineContainer li[data-type="latex"] > p:focus {
+    border-color: #adb5bd;
+    background-color: #f1f3f5;
+}
+
+#outlineContainer li[data-type="latex"] .rendered-math {
+    padding: 5px 10px;
+    margin-top: 5px;
+    background-color: #fff;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+    overflow-x: auto;
+    text-align: center;
+}
+
+#outlineContainer li[data-type="latex"] .katex-error {
+    color: #dc3545;
+    font-family: monospace;
+    font-size: 0.9em;
+    margin-top: 5px;
+    padding: 3px;
+    background-color: #f8d7da;
+    border-radius: 3px;
+}
+
 /* --- Formatting --- */
 mark {
     background-color: #fff3cd; /* Bootstrap yellow */
@@ -470,6 +511,9 @@ a:hover { text-decoration: underline; }
      #outlineContainer li[data-type="ordered"] { padding-left: 26px; } /* Adjust ordered padding */
      #outlineContainer li[data-type="ordered"] > p::before { left: 16px; top: 0.2em; }
 
+    #outlineContainer li[data-type="latex"] > p {
+        padding: 8px;
+    }
 
      main#outlineContainer { padding: 10px; line-height: 1.55; }
      #outlineContainer li > p { padding: 1px 4px; min-height: 1.55em; }

@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bike Editor Pro</title>
     <link rel="stylesheet" href="style.css">
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <!-- Optional: Theme color for PWA -->
@@ -66,6 +69,7 @@
         <button class="type-button" data-type="ordered" title="Ordered List Item">1.</button>
         <button class="type-button" data-type="unordered" title="Unordered List Item">•</button>
         <button class="type-button" data-type="hr" title="Horizontal Rule">—</button>
+        <button class="type-button" data-type="latex" title="LaTeX Math Block">∑</button>
         <button class="type-button" data-type="" title="Plain Text">P</button> <!-- Empty data-type for default -->
         <hr>
         <!-- Outline Operation Buttons -->

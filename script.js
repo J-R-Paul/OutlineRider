@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let dragDropIndicator = null;
     let lastDropTarget = null;
     let lastDropPosition = null;
+    let katexInitialized = typeof katex !== 'undefined'; // Check if KaTeX is available
 
 
     // --- Constants ---
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const LOCAL_STORAGE_KEY = 'bikeEditorProDraft';
     const PERSISTENT_OPFS_FILENAME = '_current_outline.bike';
     const AUTOSAVE_DELAY = 1500;
+    const DEFAULT_LATEX = '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}';
 
 
     // --- Feature Detection & Initial Setup ---
@@ -180,6 +182,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleContentChange(event) {
         if (event?.target?.classList.contains('fold-toggle')) return; // Ignore folding
         if (isLoading) return; // Ignore during load
+        
+        // Special handling for LaTeX blocks
+        if (event?.target?.tagName === 'P' && 
+            event.target.parentElement?.getAttribute('data-type') === 'latex') {
+            // Debounce LaTeX rendering to avoid re-rendering during typing
+            const latexP = event.target;
+            const latexLi = latexP.parentElement;
+            
+            clearTimeout(latexP.dataset.latexTimer);
+            latexP.dataset.latexTimer = setTimeout(() => {
+                renderLaTeXBlock(latexP, latexLi);
+            }, 800); // Delay LaTeX rendering for performance
+        }
+        
         if (!isDirty) {
             console.log("Content changed, marking as dirty.");
             isDirty = true;
@@ -654,6 +670,12 @@ document.addEventListener('DOMContentLoaded', () => {
         rootUlElement = outlineContainer.querySelector('ul');
         if (!rootUlElement) throw new Error("Internal Error: Failed to attach parsed content.");
         makeEditableAndInteractive(rootUlElement);
+        
+        // Render any LaTeX blocks after parsing
+        rootUlElement.querySelectorAll('li[data-type="latex"] > p').forEach(p => {
+            renderLaTeXBlock(p, p.parentElement);
+        });
+        
         initialMessageDiv?.remove();
         console.log("Parsing and rendering complete.");
     }
@@ -708,6 +730,12 @@ document.addEventListener('DOMContentLoaded', () => {
                  p.prepend(checkbox);
             }
              checkbox.textContent = li.getAttribute('data-done') === 'true' ? '☑' : '☐';
+        } else if (dataType === 'latex') {
+            // Set up LaTeX block
+            if (!p.textContent.trim()) {
+                p.textContent = DEFAULT_LATEX;
+            }
+            renderLaTeXBlock(p, li);
         } else {
             p.querySelector('span.task-checkbox')?.remove();
             if (p.firstChild?.nodeType === Node.TEXT_NODE && p.firstChild.textContent.startsWith(' ')) {
@@ -715,13 +743,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!p.firstChild.textContent) p.firstChild.remove();
             }
         }
+        
         const hasVisibleContent = p.textContent.trim() || p.querySelector('img, br');
-         if (!hasVisibleContent && !p.querySelector('br')) {
-             p.appendChild(document.createElement('br'));
-         } else if (p.innerHTML.trim() === '<br>' && p.textContent.trim()) {
-             const br = p.querySelector('br');
-             if(br && !br.previousSibling && !br.nextSibling) br.remove();
-         }
+        if (!hasVisibleContent && !p.querySelector('br')) {
+            p.appendChild(document.createElement('br'));
+        } else if (p.innerHTML.trim() === '<br>' && p.textContent.trim()) {
+            const br = p.querySelector('br');
+            if(br && !br.previousSibling && !br.nextSibling) br.remove();
+        }
+    }
+
+    function renderLaTeXBlock(p, li) {
+        if (!katexInitialized && typeof katex === 'undefined') {
+            // Try to initialize KaTeX if it's loaded after our script
+            katexInitialized = typeof katex !== 'undefined';
+            
+            if (!katexInitialized) {
+                console.warn('KaTeX library not loaded, cannot render LaTeX');
+                return;
+            }
+        }
+        
+        // Remove any previous rendered math
+        li.querySelector('.rendered-math')?.remove();
+        
+        // Get LaTeX content from paragraph
+        const latexContent = p.textContent.trim();
+        if (!latexContent) return;
+        
+        // Create container for rendered math
+        const mathContainer = document.createElement('div');
+        mathContainer.className = 'rendered-math';
+        mathContainer.setAttribute('aria-hidden', 'true'); // Accessibility: math is decorative, source is the real content
+        
+        try {
+            // Render the math using KaTeX
+            katex.render(latexContent, mathContainer, {
+                displayMode: true,
+                throwOnError: false,
+                output: 'html'
+            });
+            
+            // Add rendered math after the paragraph
+            p.after(mathContainer);
+        } catch (error) {
+            console.error('LaTeX rendering error:', error);
+            
+            // Create error message
+            const errorContainer = document.createElement('div');
+            errorContainer.className = 'katex-error';
+            errorContainer.textContent = `LaTeX Error: ${error.message || 'Unknown error'}`;
+            
+            // Add error after paragraph
+            p.after(errorContainer);
+        }
     }
 
     function serializeOutlineToHTML() {
@@ -729,17 +804,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const emptyTitle = "Empty Outline";
             return `<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml">\n  <head>\n    <meta charset="utf-8"/>\n    <title>${escapeXml(emptyTitle)}</title>\n  </head>\n  <body>\n    <ul id="root"></ul>\n  </body>\n</html>`;
         }
+        
         if (document.activeElement?.isContentEditable) document.activeElement.blur();
         const contentToSave = rootUlElement.cloneNode(true);
+        
         try {
             contentToSave.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
             contentToSave.querySelectorAll('[contenteditable="true"]').forEach(el => el.removeAttribute('contenteditable'));
             contentToSave.querySelectorAll('[tabindex]').forEach(el => el.removeAttribute('tabindex'));
             contentToSave.querySelectorAll('span.task-checkbox').forEach(el => el.remove());
             contentToSave.querySelectorAll('.fold-toggle').forEach(el => el.remove());
+            
+            // Remove rendered math containers but leave the LaTeX source
+            contentToSave.querySelectorAll('.rendered-math, .katex-error').forEach(el => el.remove());
+            
             contentToSave.querySelectorAll('li[data-type="task"] > p').forEach(p => {
                 if (p.firstChild?.nodeType === Node.TEXT_NODE && p.firstChild.textContent.startsWith(' ')) {
-                     p.firstChild.textContent = p.firstChild.textContent.substring(1); if (!p.firstChild.textContent) p.firstChild.remove();
+                    p.firstChild.textContent = p.firstChild.textContent.substring(1); 
+                    if (!p.firstChild.textContent) p.firstChild.remove();
                 }
             });
             contentToSave.querySelectorAll('ul:empty').forEach(ul => ul.remove());
@@ -1038,13 +1120,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function changeItemType(li, type) {
-         if (!li) return; const oldType = li.getAttribute('data-type') || ""; if (type === oldType) return;
+         if (!li) return; 
+         const oldType = li.getAttribute('data-type') || ""; 
+         if (type === oldType) return;
+         
          console.log(`Changing type of ${li.id} from '${oldType || 'default'}' to '${type || 'default'}'`);
-         if (type) li.setAttribute('data-type', type); else li.removeAttribute('data-type');
+         
+         // Remove any rendered LaTeX container if it exists
+         if (oldType === 'latex') {
+             li.querySelector('.rendered-math')?.remove();
+             li.querySelector('.katex-error')?.remove();
+         }
+         
+         if (type) li.setAttribute('data-type', type); 
+         else li.removeAttribute('data-type');
+         
          let p = li.querySelector(':scope > p');
-         if (type === 'hr') { if (p) p.remove(); li.tabIndex = 0; li.focus(); }
-         else { if (!p) { p = document.createElement('p'); p.setAttribute('contenteditable', 'true'); p.innerHTML = '<br>'; li.prepend(p); } setupParagraph(p, li); li.removeAttribute('tabindex'); focusAndMoveCursor(p, false); }
+         
+         if (type === 'hr') {
+             if (p) p.remove();
+             li.tabIndex = 0;
+             li.focus();
+         } else if (type === 'latex') {
+             // Special handling for latex type
+             if (!p) {
+                 p = document.createElement('p');
+                 p.setAttribute('contenteditable', 'true');
+                 p.textContent = DEFAULT_LATEX;
+                 li.prepend(p);
+             } else if (!p.textContent.trim()) {
+                 // If paragraph is empty, add default LaTeX
+                 p.textContent = DEFAULT_LATEX;
+             }
+             setupParagraph(p, li);
+             focusAndMoveCursor(p, false);
+         } else {
+             if (!p) {
+                 p = document.createElement('p');
+                 p.setAttribute('contenteditable', 'true');
+                 p.innerHTML = '<br>';
+                 li.prepend(p);
+             }
+             setupParagraph(p, li);
+             li.removeAttribute('tabindex');
+             focusAndMoveCursor(p, false);
+         }
+         
          handleContentChange();
+         
          if (li.parentElement) makeEditableAndInteractive(li.parentElement);
     }
 
