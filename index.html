@@ -21,80 +21,83 @@
 
 </head>
 <body>
-    <header>
-        <div class="header-main">
-             <h1>Bike Editor Pro</h1>
-             <span id="currentFileName" title="Current working file source">No file</span>
+    <div class="content-wrapper">
+        <header>
+            <div class="header-main">
+                 <h1>Bike Editor Pro</h1>
+                 <span id="currentFileName" title="Current working file source">No file</span>
+            </div>
+
+            <div class="file-actions">
+                <!-- Standard File System Access (Direct Edit) -->
+                <div class="action-group" id="directFileAccess" style="display: none;">
+                    <button id="openDirectButton" title="Open & edit a file directly on your device (Chrome/Edge)">Open Direct</button>
+                    <button id="saveDirectButton" disabled title="Save changes directly to the opened file (Chrome/Edge)">Save Direct</button>
+                </div>
+
+                 <!-- OPFS (Persistent App Storage) -->
+                <div class="action-group" id="opfsFileAccess" style="display: none;">
+                     <button id="newAppFileButton" title="Start a new empty file in App Storage (warns if unsaved changes)">New App File</button>
+                     <button id="saveToOpfsButton" disabled title="Save current content to persistent App Storage (overwrites previous)">Save to App</button>
+                </div>
+
+                <!-- General Load/Save -->
+                <div class="action-group">
+                    <label for="fileInput" class="file-input-label" title="Load content from a file (will overwrite App Storage on next save)">
+                        Load Copy
+                        <input type="file" id="fileInput"
+                               accept=".bike,.xhtml,.html,application/xhtml+xml,text/xml,application/xml"
+                               aria-label="Load Bike File (Creates Copy)">
+                    </label>
+                     <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
+                     <!-- Removed Clear Temp Draft Button -->
+                </div>
+            </div>
+        </header>
+
+        <!-- Toolbar moved back to original position -->
+        <div id="toolbar">
+            <!-- Formatting Buttons -->
+            <button class="format-button" data-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button class="format-button" data-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button class="format-button" data-command="code" title="Code">{}</button>
+            <button class="format-button" data-command="highlight" title="Highlight">H</button>
+            <button id="linkButton" title="Create Link (Ctrl+K)">Link</button>
+            <hr>
+            <!-- Item Type Buttons -->
+            <button class="type-button" data-type="heading" title="Heading">H</button>
+            <button class="type-button" data-type="note" title="Note">N</button>
+            <button class="type-button" data-type="task" title="Task">T</button>
+            <button class="type-button" data-type="ordered" title="Ordered List Item">1.</button>
+            <button class="type-button" data-type="unordered" title="Unordered List Item">•</button>
+            <button class="type-button" data-type="hr" title="Horizontal Rule">—</button>
+            <button class="type-button" data-type="latex" title="LaTeX Math Block">∑</button>
+            <button class="type-button" data-type="" title="Plain Text">P</button> <!-- Empty data-type for default -->
+            <hr>
+            <!-- Outline Operation Buttons -->
+            <button id="indentButton" title="Indent (Tab)">→</button>
+            <button id="outdentButton" title="Outdent (Shift+Tab)">←</button>
+            <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">↑</button>
+            <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">↓</button>
+            <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">✕</button>
+            <!-- Add fold/unfold all button? Maybe later -->
         </div>
 
-        <div class="file-actions">
-            <!-- Standard File System Access (Direct Edit) -->
-            <div class="action-group" id="directFileAccess" style="display: none;">
-                <button id="openDirectButton" title="Open & edit a file directly on your device (Chrome/Edge)">Open Direct</button>
-                <button id="saveDirectButton" disabled title="Save changes directly to the opened file (Chrome/Edge)">Save Direct</button>
+        <main id="outlineContainer" tabindex="0">
+            <div id="initialMessage">
+                <p>Welcome to Bike Editor Pro!</p>
+                <p>Choose how to start:</p>
+                <ul>
+                    <li id="directInfo" style="display: none;"><b>Open Direct:</b> Edit files directly on your device (Chrome/Edge). Changes saved here are separate from App Storage.</li>
+                    <li id="opfsInfo" style="display: none;"><b>New App File:</b> Start fresh. Content is automatically saved in this app's private storage when you click 'Save to App'.</li>
+                    <li id="opfsInfo2" style="display: none;"><b>(Auto-Load):</b> If you previously saved to App Storage, your last session is loaded automatically.</li>
+                    <li><b>Load Copy:</b> Open content from a device file. Use 'Save to App' to make it persistent here, or 'Save As' to download.</li>
+                </ul>
+                 <p><b>Editing:</b> Enter=New Item, Shift+Enter=Line Break, Tab=Indent, Shift+Tab=Outdent.</p>
+                 <p>Click task checkboxes <span class="task-example">☐</span> to mark done. Click triangles ▶ to fold/unfold items.</p>
             </div>
-
-             <!-- OPFS (Persistent App Storage) -->
-            <div class="action-group" id="opfsFileAccess" style="display: none;">
-                 <button id="newAppFileButton" title="Start a new empty file in App Storage (warns if unsaved changes)">New App File</button>
-                 <button id="saveToOpfsButton" disabled title="Save current content to persistent App Storage (overwrites previous)">Save to App</button>
-            </div>
-
-            <!-- General Load/Save -->
-            <div class="action-group">
-                <label for="fileInput" class="file-input-label" title="Load content from a file (will overwrite App Storage on next save)">
-                    Load Copy
-                    <input type="file" id="fileInput"
-                           accept=".bike,.xhtml,.html,application/xhtml+xml,text/xml,application/xml"
-                           aria-label="Load Bike File (Creates Copy)">
-                </label>
-                 <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
-                 <!-- Removed Clear Temp Draft Button -->
-            </div>
-        </div>
-    </header>
-
-    <div id="toolbar">
-        <!-- Formatting Buttons -->
-        <button class="format-button" data-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
-        <button class="format-button" data-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
-        <button class="format-button" data-command="code" title="Code">{}</button>
-        <button class="format-button" data-command="highlight" title="Highlight">H</button>
-        <button id="linkButton" title="Create Link (Ctrl+K)">Link</button>
-        <hr>
-        <!-- Item Type Buttons -->
-        <button class="type-button" data-type="heading" title="Heading">H</button>
-        <button class="type-button" data-type="note" title="Note">N</button>
-        <button class="type-button" data-type="task" title="Task">T</button>
-        <button class="type-button" data-type="ordered" title="Ordered List Item">1.</button>
-        <button class="type-button" data-type="unordered" title="Unordered List Item">•</button>
-        <button class="type-button" data-type="hr" title="Horizontal Rule">—</button>
-        <button class="type-button" data-type="latex" title="LaTeX Math Block">∑</button>
-        <button class="type-button" data-type="" title="Plain Text">P</button> <!-- Empty data-type for default -->
-        <hr>
-        <!-- Outline Operation Buttons -->
-        <button id="indentButton" title="Indent (Tab)">→</button>
-        <button id="outdentButton" title="Outdent (Shift+Tab)">←</button>
-        <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">↑</button>
-        <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">↓</button>
-        <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">✕</button>
-        <!-- Add fold/unfold all button? Maybe later -->
+        </main>
     </div>
-
-    <main id="outlineContainer" tabindex="0">
-        <div id="initialMessage">
-            <p>Welcome to Bike Editor Pro!</p>
-            <p>Choose how to start:</p>
-            <ul>
-                <li id="directInfo" style="display: none;"><b>Open Direct:</b> Edit files directly on your device (Chrome/Edge). Changes saved here are separate from App Storage.</li>
-                <li id="opfsInfo" style="display: none;"><b>New App File:</b> Start fresh. Content is automatically saved in this app's private storage when you click 'Save to App'.</li>
-                <li id="opfsInfo2" style="display: none;"><b>(Auto-Load):</b> If you previously saved to App Storage, your last session is loaded automatically.</li>
-                <li><b>Load Copy:</b> Open content from a device file. Use 'Save to App' to make it persistent here, or 'Save As' to download.</li>
-            </ul>
-             <p><b>Editing:</b> Enter=New Item, Shift+Enter=Line Break, Tab=Indent, Shift+Tab=Outdent.</p>
-             <p>Click task checkboxes <span class="task-example">☐</span> to mark done. Click triangles ▶ to fold/unfold items.</p>
-        </div>
-    </main>
 
     <!-- Worker script -->
     <script src="worker.js" defer></script>

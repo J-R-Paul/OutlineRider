@@ -121,6 +121,11 @@ header button.save-success {
     gap: 5px;
     flex-wrap: wrap;
     align-items: center;
+    /* Desktop: Sticky positioning at top */
+    position: sticky;
+    top: 0; /* Stick to top of viewport */
+    z-index: 100; /* Higher z-index to appear above content */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); /* Add subtle shadow for depth */
 }
 
 #toolbar button {
@@ -490,12 +495,28 @@ a:hover { text-decoration: underline; }
     }
 
     #toolbar {
-        padding: 5px 10px;
-        justify-content: flex-start;
-        /* Optional: Enable horizontal scrolling for toolbar */
-        /* overflow-x: auto; */
-        /* white-space: nowrap; */
+        /* Mobile toolbar positioning: fixed at bottom */
+        position: fixed;
+        top: auto; /* Reset top property */
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-bottom: none;
+        border-top: 1px solid #dee2e6;
+        padding: 8px 10px;
+        justify-content: center;
+        background-color: rgba(248, 249, 250, 0.97); /* Slightly transparent */
+        box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+        z-index: 1000; /* Ensure it's above everything */
+        /* Handle iOS Safari's bottom UI elements */
+        padding-bottom: env(safe-area-inset-bottom, 8px);
     }
+    
+    main#outlineContainer {
+        /* Add padding to prevent content from being hidden behind the fixed toolbar */
+        padding-bottom: 60px; /* Approximate height of the toolbar + some extra space */
+    }
+
     #toolbar button {
          padding: 3px 6px;
          min-width: 28px;
@@ -528,4 +549,23 @@ a:hover { text-decoration: underline; }
      #outlineContainer li[data-type="unordered"]::before { left: 14px; }
      #outlineContainer li[data-type="ordered"] { padding-left: 24px; }
      #outlineContainer li[data-type="ordered"] > p::before { left: 14px; }
+
+    main#outlineContainer {
+        /* Adjust padding for smaller screens if needed */
+        padding-bottom: 70px;
+    }
+}
+
+/* Special case for mobile devices with virtual keyboard visible */
+@media (max-height: 450px) and (max-width: 768px) {
+    #toolbar {
+        /* When virtual keyboard is likely open (small height), make toolbar more compact */
+        padding: 4px 8px;
+    }
+    
+    #toolbar button {
+        /* Smaller buttons when keyboard is open */
+        min-width: 24px;
+        padding: 2px 4px;
+    }
 }
