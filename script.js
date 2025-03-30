@@ -856,15 +856,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dataType === 'task') {
             let checkbox = p.querySelector('span.task-checkbox');
             if (!checkbox) {
-                 checkbox = document.createElement('span'); checkbox.className = 'task-checkbox';
-                 checkbox.setAttribute('contenteditable', 'false'); checkbox.setAttribute('aria-hidden', 'true');
-                 const firstText = Array.from(p.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
-                 if (firstText && !/^\s/.test(firstText.textContent)) p.insertBefore(document.createTextNode(' '), firstText);
-                 else if (!firstText && p.firstChild) p.insertBefore(document.createTextNode(' '), p.firstChild);
-                 else if (!p.firstChild) p.appendChild(document.createTextNode(' '));
-                 p.prepend(checkbox);
+                checkbox = document.createElement('span'); 
+                checkbox.className = 'task-checkbox';
+                checkbox.setAttribute('contenteditable', 'false'); 
+                checkbox.setAttribute('aria-hidden', 'true');
+                
+                // Ensure there's always a space after the checkbox
+                const space = document.createTextNode(' ');
+                
+                // Clear any leading spaces from text nodes
+                const firstText = Array.from(p.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+                if (firstText) {
+                    // Remove leading space if it exists
+                    if (/^\s/.test(firstText.textContent)) {
+                        firstText.textContent = firstText.textContent.substring(1);
+                        if (!firstText.textContent) firstText.remove();
+                    }
+                }
+                
+                // Add checkbox then space
+                p.prepend(space);
+                p.prepend(checkbox);
             }
-             checkbox.textContent = li.getAttribute('data-done') === 'true' ? '☑' : '☐';
+            checkbox.textContent = li.getAttribute('data-done') === 'true' ? '☑' : '☐';
         } else if (dataType === 'latex') {
             // Set up LaTeX block
             if (!p.textContent.trim()) {
@@ -1031,7 +1045,6 @@ document.addEventListener('DOMContentLoaded', () => {
      }
 
     // --- Keyboard Navigation & Editing ---
-    // ... (handleKeyDown fixed in previous response) ...
     function handleKeyDown(event) {
         const selectedLi = getSelectedLi();
         const targetP = getFocusedP();
@@ -1065,9 +1078,36 @@ document.addEventListener('DOMContentLoaded', () => {
                          event.preventDefault(); document.execCommand('insertLineBreak'); handleContentChange();
                      }
                 } else {
-                     event.preventDefault(); createNewItem(selectedLi);
+                     event.preventDefault();
+                     
+                     // Check if current item is not plain type and is empty
+                     const currentType = selectedLi.getAttribute('data-type');
+                     
+                     // Skip horizontal rules and don't convert LaTeX blocks
+                     if (currentType && currentType !== '' && currentType !== 'hr' && currentType !== 'latex' && targetP) {
+                         // Check if paragraph is empty (considering special cases like task checkboxes)
+                         let textContent = targetP.textContent.trim();
+                         
+                         // For tasks, the checkbox text (☐/☑) shouldn't count as content
+                         if (currentType === 'task' && (textContent.startsWith('☐') || textContent.startsWith('☑'))) {
+                             textContent = textContent.substring(1).trim();
+                         }
+                         
+                         const isEmptyP = !textContent || targetP.innerHTML.trim() === '<br>';
+                         
+                         if (isEmptyP) {
+                             // Convert to plain type instead of creating new item
+                             console.log(`Converting empty ${currentType} item to plain on Enter: ${selectedLi.id}`);
+                             changeItemType(selectedLi, '');
+                             return;
+                         }
+                     }
+                     
+                     // If we didn't convert to plain, create a new item
+                     createNewItem(selectedLi);
                  }
                 break;
+            
             case 'Tab':
                 event.preventDefault();
                 if (event.shiftKey) outdentItem(selectedLi); else indentItem(selectedLi);
@@ -1083,15 +1123,68 @@ document.addEventListener('DOMContentLoaded', () => {
                  } else if (event.altKey && event.shiftKey) { event.preventDefault(); moveItemDown(selectedLi); }
                  break;
              case 'Backspace':
+                 // Handle converting formatted blocks to plain when cursor is at start
+                 if (targetP && targetP === selectedLi.querySelector(':scope > p')) {
+                     const selection = window.getSelection();
+                     const cursorAtStartOfP = selection?.rangeCount > 0 && 
+                                             selection.getRangeAt(0).startOffset === 0 && 
+                                             selection.getRangeAt(0).collapsed;
+                     
+                     if (cursorAtStartOfP) {
+                         const dataType = selectedLi.getAttribute('data-type');
+                         
+                         // If it's a non-plain, non-empty block, convert to plain
+                         if (dataType && dataType !== 'hr' && dataType !== 'latex') {
+                             // Check if the paragraph is truly empty
+                             // For tasks, we need to ignore the checkbox when determining emptiness
+                             let textContent = targetP.textContent.trim();
+                             const isTaskBlock = dataType === 'task';
+                             
+                             // For tasks, the checkbox text (☐/☑) shouldn't count as content
+                             if (isTaskBlock && textContent.startsWith('☐') || textContent.startsWith('☑')) {
+                                 textContent = textContent.substring(1).trim();
+                             }
+                             
+                             const isEmptyP = !textContent || (targetP.innerHTML.trim() === '<br>');
+                             
+                             if (isEmptyP) {
+                                 event.preventDefault(); 
+                                 deleteItem(selectedLi);
+                             } else {
+                                 // If paragraph has content, just change type to plain
+                                 event.preventDefault();
+                                 console.log(`Converting item ${selectedLi.id} from ${dataType} to plain`);
+                                 changeItemType(selectedLi, '');  // Empty string for plain type
+                                 
+                                 // Make sure cursor stays at the start of the paragraph
+                                 const p = selectedLi.querySelector(':scope > p');
+                                 if (p) {
+                                     requestAnimationFrame(() => {
+                                         focusAndMoveCursor(p, true);
+                                     });
+                                 }
+                             }
+                             return;
+                         }
+                         
+                         // Handle normal deletion if cursor at start of a plain block
+                         const isEmptyP = !targetP.textContent.trim() || targetP.innerHTML.trim() === '<br>';
+                         if (isEmptyP) {
+                             event.preventDefault(); 
+                             deleteItem(selectedLi);
+                         }
+                     }
+                 }
+                 break;
              case 'Delete':
                  const isHrSelectedAndFocused = selectedLi.getAttribute('data-type') === 'hr' && document.activeElement === selectedLi;
                  const p = selectedLi.querySelector(':scope > p');
-                 const isEmptyP = p && p.getAttribute('contenteditable') === 'true' && (!p.textContent.trim() && p.querySelectorAll('*').length === 0 || p.innerHTML.trim() === '<br>');
-                 const selection = window.getSelection();
-                 const cursorAtStartOfP = targetP === p && selection?.rangeCount > 0 && selection.getRangeAt(0).startOffset === 0 && selection.getRangeAt(0).collapsed;
-
-                 if ((event.key === 'Delete' && isHrSelectedAndFocused) || (isEmptyP && targetP === p) || (event.key === 'Backspace' && cursorAtStartOfP && p === targetP && p?.parentElement?.isSameNode(selectedLi))) {
-                     event.preventDefault(); deleteItem(selectedLi);
+                 const isEmptyP = p && p.getAttribute('contenteditable') === 'true' && 
+                                 (!p.textContent.trim() && p.querySelectorAll('*').length === 0 || p.innerHTML.trim() === '<br>');
+                 
+                 if (isHrSelectedAndFocused || (isEmptyP && targetP === p)) {
+                     event.preventDefault(); 
+                     deleteItem(selectedLi);
                  }
                  break;
              case 'b': if (event.ctrlKey || event.metaKey) { event.preventDefault(); formatSelection('bold'); } break;
@@ -1099,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', () => {
              case 'k': if (event.ctrlKey || event.metaKey) { event.preventDefault(); handleLinkButtonClick(selectedLi); } break;
         }
     }
-    // ... (formatSelection, createFirstItemBare, createMinimalStructure, createNewItem - no changes needed) ...
+
     function formatSelection(command) {
          const targetP = ensureFocusInEditableParagraph(getSelectedLi()); if (!targetP) return;
          switch (command) {
@@ -1140,12 +1233,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createNewItem(currentItemLi) {
         if (!currentItemLi || !outlineContainer.contains(currentItemLi)) return;
-        const newLi = document.createElement('li'); newLi.id = generateUniqueId();
-        const newP = document.createElement('p'); newP.setAttribute('contenteditable', 'true'); newP.innerHTML = '<br>';
+        
+        // Create new LI element with unique ID
+        const newLi = document.createElement('li');
+        newLi.id = generateUniqueId();
+        
+        // Get the data-type of the current item to inherit it
+        const currentType = currentItemLi.getAttribute('data-type');
+        
+        // Horizontal rules and LaTeX blocks should not be inherited
+        const inheritableTypes = ['heading', 'note', 'task', 'ordered', 'unordered'];
+        
+        // Only inherit certain types, not horizontal rules or LaTeX
+        if (currentType && inheritableTypes.includes(currentType)) {
+            // Inherit the data-type
+            newLi.setAttribute('data-type', currentType);
+            
+            // For tasks, don't inherit the "done" status
+            if (currentType === 'task') {
+                // Don't copy data-done="true" attribute
+                newLi.removeAttribute('data-done');
+            }
+        }
+        
+        // Create paragraph for the new item
+        const newP = document.createElement('p');
+        newP.setAttribute('contenteditable', 'true');
+        newP.innerHTML = '<br>';
         newLi.appendChild(newP);
+        
+        // Insert the new item after the current one
         currentItemLi.after(newLi);
+        
+        // Apply interactive features to the new list
         makeEditableAndInteractive(newLi.parentElement);
+        
+        // Select and focus the new item
         selectAndFocusItem(newLi, true);
+        
+        // For task items, need to ensure cursor is placed after checkbox
+        if (currentType === 'task') {
+            // Give the DOM time to update with the task checkbox
+            requestAnimationFrame(() => {
+                const taskP = newLi.querySelector(':scope > p');
+                if (taskP && taskP.firstChild) {
+                    // Place cursor after the checkbox or at first text node
+                    const textNode = Array.from(taskP.childNodes).find(node => 
+                        node.nodeType === Node.TEXT_NODE);
+                        
+                    if (textNode) {
+                        const range = document.createRange();
+                        const selection = window.getSelection();
+                        // Position cursor at start of text node
+                        range.setStart(textNode, 0);
+                        range.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        taskP.focus();
+                    }
+                }
+            });
+        }
+        
+        // Mark content as changed
         handleContentChange();
     }
 
