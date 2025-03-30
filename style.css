@@ -1,4 +1,3 @@
-/* --- Additions/Modifications --- */
 body {
     font-family: sans-serif;
     margin: 0;
@@ -6,11 +5,12 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    background-color: #f8f8f8; /* Slightly off-white background */
 }
 
 header {
-    padding: 10px;
-    background-color: #f0f0f0;
+    padding: 10px 15px;
+    background-color: #e9e9e9;
     border-bottom: 1px solid #ccc;
     display: flex;
     gap: 10px;
@@ -22,36 +22,65 @@ header > div { /* Group file buttons */
     gap: 5px;
     align-items: center;
 }
+header h1 {
+    margin: 0;
+    font-size: 1.4em;
+    margin-right: auto; /* Push other elements right */
+    white-space: nowrap;
+}
+
 #currentFileName {
     font-style: italic;
     font-size: 0.9em;
     color: #555;
+    margin: 0 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px; /* Limit width */
+    display: inline-block; /* Needed for max-width */
+    vertical-align: middle;
 }
 
 
 #toolbar {
-    padding: 8px;
-    background-color: #eee;
+    padding: 8px 15px;
+    background-color: #f0f0f0;
     border-bottom: 1px solid #ccc;
     display: flex;
     gap: 5px;
-    flex-wrap: wrap;
+    flex-wrap: wrap; /* Ensure wrapping */
+    align-items: center;
 }
 
 #toolbar button, header button, header input {
     padding: 5px 10px;
     cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    border-radius: 3px;
+    font-size: 0.9em;
 }
+header button, header input {
+     font-size: 0.9em;
+}
+
+#toolbar button:hover, header button:hover {
+    background-color: #f5f5f5;
+    border-color: #bbb;
+}
+
 #toolbar button:disabled, header button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+    background-color: #eee;
 }
 
 
 #toolbar hr {
     border: none;
     border-left: 1px solid #ccc;
-    height: 20px; /* Adjust height as needed */
+    height: 20px;
     margin: 0 5px;
 }
 
@@ -60,6 +89,8 @@ main#outlineContainer {
     padding: 15px;
     overflow-y: auto; /* Allow scrolling */
     outline: none; /* Prevent outline container focus ring */
+    background-color: #fff; /* White editing area */
+    line-height: 1.5; /* Improve readability */
 }
 
 /* --- Outline Styling --- */
@@ -74,74 +105,93 @@ main#outlineContainer {
 #outlineContainer ul ul { padding-left: 25px; }
 #outlineContainer ul ul ul { padding-left: 25px; }
 #outlineContainer ul ul ul ul { padding-left: 25px; }
-/* Add more levels if needed, or use a more dynamic CSS approach if targeting many levels */
+#outlineContainer ul ul ul ul ul { padding-left: 25px; } /* Add more if needed */
+
 
 #outlineContainer li {
-    margin: 2px 0;
-    position: relative; /* For potential pseudo-elements later */
+    margin: 3px 0; /* Slightly more vertical space */
+    position: relative; /* For pseudo-elements */
 }
 
 #outlineContainer li > p {
     margin: 0;
     padding: 3px 5px;
-    min-height: 1.2em; /* Ensure empty paragraphs are clickable */
+    min-height: 1.5em; /* Ensure empty paragraphs are clickable based on line-height */
     outline: none; /* Remove default contenteditable outline */
     border: 1px solid transparent; /* Placeholder for focus */
-    /* White space handling is important for <br> */
     white-space: pre-wrap; /* Allows wrapping and preserves line breaks */
     word-wrap: break-word; /* Ensure long words break */
+    border-radius: 2px; /* Slight rounding */
 }
 
 
 #outlineContainer li > p:focus {
-    border: 1px dashed #aaa; /* Simple focus indicator */
+    border: 1px dashed #999; /* Subtle focus indicator */
     background-color: #f9f9f9;
 }
 
-/* --- Item Type Styling (Mostly unchanged, ensure HR styling is robust) --- */
+/* --- Item Type Styling --- */
 
 #outlineContainer li[data-type="heading"] > p {
     font-weight: bold;
-    font-size: 1.2em;
-    margin-top: 0.5em;
+    font-size: 1.25em;
+    margin-top: 0.6em;
+    margin-bottom: 0.2em;
+    line-height: 1.3;
+    border-bottom: 1px solid #eee; /* Subtle separator */
+    padding-bottom: 4px;
 }
 
 #outlineContainer li[data-type="note"] {
-    color: #555;
+    color: #444;
+}
+#outlineContainer li[data-type="note"] > p {
     font-style: italic;
+    background-color: #fdfdea; /* Very light yellow tint */
+    border-left: 3px solid #edd482;
+    padding-left: 8px;
 }
-#outlineContainer li[data-type="note"] > p::before {
-    content: "» "; /* Example indicator */
-    color: #aaa;
-    margin-right: 0.3em;
-}
+/* #outlineContainer li[data-type="note"] > p::before { content: "» "; color: #aaa; margin-right: 0.3em; } */
 
 
 #outlineContainer li[data-type="task"] > p::before {
     content: "☐ "; /* Simple task indicator */
     cursor: pointer; /* Might add JS later to toggle */
-    margin-right: 0.3em;
+    margin-right: 0.4em;
+    font-family: sans-serif; /* Ensure consistent checkbox appearance */
 }
-/* Add [data-done="true"] later for checked tasks */
-/* #outlineContainer li[data-type="task"][data-done="true"] > p::before { content: "☑ "; } */
+/* Example for completed task (add data-done="true" via JS) */
+/* #outlineContainer li[data-type="task"][data-done="true"] > p::before { content: "☑ "; text-decoration: line-through; color: #888; } */
 
 
 #outlineContainer li[data-type="ordered"] {
-    /* Basic visual cue, could use CSS counters for real numbers */
+    /* Using CSS Counters for numbering */
+    counter-increment: ordered-list-item;
 }
 #outlineContainer li[data-type="ordered"] > p::before {
-    content: "1. "; /* Very basic indicator, doesn't auto-number */
+    content: counter(ordered-list-item) ". ";
     font-weight: bold;
-    margin-right: 0.3em;
+    margin-right: 0.4em;
+    min-width: 1.5em; /* Ensure space for numbers */
+    display: inline-block;
+    text-align: right; /* Align numbers nicely */
+}
+/* Reset counter for nested lists */
+#outlineContainer ul {
+    counter-reset: ordered-list-item;
 }
 
 
 #outlineContainer li[data-type="unordered"]::before {
-    content: '•'; /* Or use standard list-style-type on ul */
+    content: '•';
     position: absolute;
-    left: -15px; /* Adjust based on padding */
-    top: 5px; /* Align with text */
+    left: -15px;
+    top: 0.4em; /* Adjust vertical alignment */
+    color: #555;
 }
+#outlineContainer ul ul li[data-type="unordered"]::before { content: '◦'; } /* Circle for level 2 */
+#outlineContainer ul ul ul li[data-type="unordered"]::before { content: '▪'; } /* Square for level 3 */
+
 
 #outlineContainer li[data-type="hr"] > p {
     display: none; /* Hide the paragraph */
@@ -149,7 +199,7 @@ main#outlineContainer {
 #outlineContainer li[data-type="hr"] {
     height: 1px;
     background-color: #ccc;
-    margin: 1em 0;
+    margin: 1.2em 0;
     list-style: none; /* Remove bullet */
     padding: 0;
 }
@@ -158,45 +208,94 @@ main#outlineContainer {
 }
 
 
-/* --- Formatting (Unchanged) --- */
-mark { background-color: yellow; padding: 0.1em 0.2em; }
-code { font-family: monospace; background-color: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; }
+/* --- Formatting --- */
+mark {
+    background-color: #fafa8c; /* Softer yellow */
+    padding: 0.1em 0.2em;
+    border-radius: 2px;
+}
+
+code {
+    font-family: monospace;
+    background-color: #f0f0f0;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    border: 1px solid #e0e0e0;
+    font-size: 0.95em;
+}
+
+a {
+    color: #007bff;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
 
 /* --- Selection Highlight --- */
 #outlineContainer li.selected > p {
     background-color: #e0f0ff; /* Highlight selected item */
+    border-color: #a0cfff;
+}
+#outlineContainer li[data-type="hr"].selected { /* Style selected HR */
+     outline: 2px solid #a0cfff;
+     outline-offset: 1px;
 }
 
-/* --- Mobile Responsiveness (Unchanged, but test) --- */
-@media (max-width: 600px) {
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 700px) { /* Increased breakpoint slightly */
     header {
         flex-direction: column;
-        align-items: stretch; /* Make buttons full width */
+        align-items: flex-start; /* Align items left */
     }
      header > div {
-         justify-content: center;
-         width: 100%;
+         justify-content: flex-start;
+         width: 100%; /* Keep file input areas reasonably wide */
+         margin-bottom: 5px;
      }
     header h1 {
-        text-align: center;
+        text-align: left;
         width: 100%;
+        margin-bottom: 10px;
     }
-    #toolbar {
-        flex-direction: column;
-        align-items: stretch;
+     #currentFileName {
+        max-width: none; /* Allow more space on mobile */
     }
-    #toolbar button {
-        text-align: center;
-    }
-     #outlineContainer ul {
-        padding-left: 15px; /* Reduce indent on mobile */
-    }
-     /* Adjust nested padding */
-    #outlineContainer ul ul { padding-left: 15px; }
-    #outlineContainer ul ul ul { padding-left: 15px; }
-    #outlineContainer ul ul ul ul { padding-left: 15px; }
 
+    #toolbar {
+        justify-content: flex-start; /* Align buttons left */
+        flex-wrap: wrap; /* Ensure wrapping is enabled */
+    }
+    /* Add some vertical space between wrapped rows */
+    #toolbar button {
+       margin-bottom: 4px;
+    }
+    #toolbar hr {
+        display: none; /* Hide separators on mobile to save space? Optional */
+    }
+
+    /* Reduce indentation on mobile */
+     #outlineContainer ul {
+        padding-left: 18px;
+    }
+     #outlineContainer ul ul { padding-left: 18px; }
+     #outlineContainer ul ul ul { padding-left: 18px; }
+     #outlineContainer ul ul ul ul { padding-left: 18px; }
+     #outlineContainer ul ul ul ul ul { padding-left: 18px; }
+
+
+     /* Adjust bullet positions */
     #outlineContainer li[data-type="unordered"]::before {
-        left: -10px; /* Adjust bullet position */
+        left: -12px;
+        top: 0.45em;
+    }
+     #outlineContainer li[data-type="ordered"] > p::before {
+        margin-right: 0.3em;
+        min-width: 1.2em;
+    }
+
+     main#outlineContainer {
+        padding: 10px; /* Reduce padding */
     }
 }

@@ -12,7 +12,9 @@
         <!-- File Handling Options -->
         <div>
             <label for="fileInput">Load (Copy):</label>
-            <input type="file" id="fileInput" accept=".bike, .html" aria-label="Load Bike File (Creates Copy)">
+            <input type="file" id="fileInput"
+                   accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
+                   aria-label="Load Bike File (Creates Copy)">
         </div>
         <div id="directFileAccess" style="display: none;"> <!-- Show only if API is supported -->
              <button id="openDirectButton">Open File (Direct Edit)</button>
@@ -20,30 +22,33 @@
              <button id="saveDirectButton" disabled>Save Directly</button>
         </div>
          <button id="saveAsButton">Save As / Download</button> <!-- Renamed original save -->
+         <button id="clearLocalButton" title="Clear the draft saved in your browser storage">Clear Local Draft</button>
 
     </header>
 
     <div id="toolbar">
-        <!-- Buttons remain the same as before -->
-        <button class="format-button" data-command="bold"><b>B</b></button>
-        <button class="format-button" data-command="italic"><i>I</i></button>
-        <button class="format-button" data-command="code">{}</button>
-        <button class="format-button" data-command="highlight">H</button>
-        <button id="linkButton">Link</button>
+        <!-- Formatting Buttons -->
+        <button class="format-button" data-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="format-button" data-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button class="format-button" data-command="code" title="Code">{}</button>
+        <button class="format-button" data-command="highlight" title="Highlight">H</button>
+        <button id="linkButton" title="Create Link">Link</button>
         <hr>
-        <button class="type-button" data-type="heading">Heading</button>
-        <button class="type-button" data-type="note">Note</button>
-        <button class="type-button" data-type="task">Task</button>
-        <button class="type-button" data-type="ordered">Ordered</button>
-        <button class="type-button" data-type="unordered">Unordered</button>
-        <button class="type-button" data-type="hr">HR</button>
-        <button class="type-button" data-type="">Plain</button>
+        <!-- Item Type Buttons -->
+        <button class="type-button" data-type="heading" title="Heading">Heading</button>
+        <button class="type-button" data-type="note" title="Note">Note</button>
+        <button class="type-button" data-type="task" title="Task">Task</button>
+        <button class="type-button" data-type="ordered" title="Ordered List Item">Ordered</button>
+        <button class="type-button" data-type="unordered" title="Unordered List Item">Unordered</button>
+        <button class="type-button" data-type="hr" title="Horizontal Rule">HR</button>
+        <button class="type-button" data-type="" title="Plain Text">Plain</button> <!-- Empty data-type for default -->
         <hr>
-        <button id="indentButton">Indent</button>
-        <button id="outdentButton">Outdent</button>
-        <button id="moveUpButton">Move Up</button>
-        <button id="moveDownButton">Move Down</button>
-        <button id="deleteButton">Delete</button>
+        <!-- Outline Operation Buttons -->
+        <button id="indentButton" title="Indent (Tab)">Indent</button>
+        <button id="outdentButton" title="Outdent (Shift+Tab)">Outdent</button>
+        <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">Move Up</button>
+        <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">Move Down</button>
+        <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">Delete</button>
     </div>
 
     <main id="outlineContainer" tabindex="0"> <!-- Add tabindex to make container focusable -->
