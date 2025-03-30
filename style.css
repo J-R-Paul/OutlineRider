@@ -121,7 +121,7 @@ header button.save-success {
     gap: 5px;
     flex-wrap: wrap;
     align-items: center;
-    /* Desktop: Sticky positioning at top - now for all devices */
+    /* Desktop: Sticky positioning at top */
     position: sticky;
     top: 0; /* Stick to top of viewport */
     z-index: 100; /* Higher z-index to appear above content */
@@ -495,29 +495,32 @@ a:hover { text-decoration: underline; }
     }
 
     #toolbar {
-        /* Keep toolbar at top, just adjust styling for mobile */
+        /* Change to fixed positioning for mobile */
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
         padding: 6px 10px;
         justify-content: center;
-        /* Keep the sticky positioning from desktop */
-        position: sticky;
-        top: 0;
         z-index: 100;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        background-color: rgba(248, 249, 250, 0.97);
+        background-color: rgba(248, 249, 250, 0.98); /* Slightly more opaque */
     }
     
-    /* Remove the keyboard positioning styles since we're keeping the toolbar at top */
+    /* Add padding to main content to account for fixed toolbar */
+    main#outlineContainer {
+        padding-top: calc(38px + 15px); /* Toolbar height + original padding */
+        /* Keep bottom padding */
+        padding-bottom: 15px;
+    }
+
+    /* When keyboard is visible, ensure toolbar stays at top */
     body.keyboard-open #toolbar {
-        /* No need for special positioning */
-        position: sticky;
+        position: fixed;
         top: 0;
     }
     
-    main#outlineContainer {
-        /* Remove extra bottom padding since toolbar is at top */
-        padding-bottom: 15px; 
-    }
-
     #toolbar button {
          padding: 3px 6px;
          min-width: 28px;
@@ -557,9 +560,14 @@ a:hover { text-decoration: underline; }
 /* Remove the keyboard-specific positioning and keep simpler styles */
 @media (max-width: 768px) {
     body.keyboard-open #toolbar {
-        /* No special positioning needed - keep at top */
-        position: sticky;
+        /* Keep fixed at top when keyboard is open */
+        position: fixed;
         top: 0;
+    }
+    
+    /* Ensure enough space below the fixed toolbar */
+    body.keyboard-open main#outlineContainer {
+        padding-top: calc(38px + 15px); /* Toolbar height + original padding */
     }
 }
 
@@ -573,8 +581,9 @@ a:hover { text-decoration: underline; }
      #outlineContainer li[data-type="ordered"] { padding-left: 24px; }
      #outlineContainer li[data-type="ordered"] > p::before { left: 14px; }
 
-    /* Remove extra bottom padding */
+    /* Make sure we adjust padding for smaller screens too */
     main#outlineContainer {
+        padding-top: calc(32px + 10px); /* Smaller toolbar + smaller padding */
         padding-bottom: 15px;
     }
 }
