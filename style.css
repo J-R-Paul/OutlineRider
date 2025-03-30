@@ -1,0 +1,202 @@
+/* --- Additions/Modifications --- */
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+header {
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap; /* Allow wrapping */
+}
+header > div { /* Group file buttons */
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+#currentFileName {
+    font-style: italic;
+    font-size: 0.9em;
+    color: #555;
+}
+
+
+#toolbar {
+    padding: 8px;
+    background-color: #eee;
+    border-bottom: 1px solid #ccc;
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+#toolbar button, header button, header input {
+    padding: 5px 10px;
+    cursor: pointer;
+}
+#toolbar button:disabled, header button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+
+#toolbar hr {
+    border: none;
+    border-left: 1px solid #ccc;
+    height: 20px; /* Adjust height as needed */
+    margin: 0 5px;
+}
+
+main#outlineContainer {
+    flex-grow: 1; /* Take remaining vertical space */
+    padding: 15px;
+    overflow-y: auto; /* Allow scrolling */
+    outline: none; /* Prevent outline container focus ring */
+}
+
+/* --- Outline Styling --- */
+
+#outlineContainer ul {
+    list-style: none;
+    padding-left: 25px; /* Base indentation */
+    margin: 0;
+}
+
+/* --- Enhanced Indentation Styling --- */
+#outlineContainer ul ul { padding-left: 25px; }
+#outlineContainer ul ul ul { padding-left: 25px; }
+#outlineContainer ul ul ul ul { padding-left: 25px; }
+/* Add more levels if needed, or use a more dynamic CSS approach if targeting many levels */
+
+#outlineContainer li {
+    margin: 2px 0;
+    position: relative; /* For potential pseudo-elements later */
+}
+
+#outlineContainer li > p {
+    margin: 0;
+    padding: 3px 5px;
+    min-height: 1.2em; /* Ensure empty paragraphs are clickable */
+    outline: none; /* Remove default contenteditable outline */
+    border: 1px solid transparent; /* Placeholder for focus */
+    /* White space handling is important for <br> */
+    white-space: pre-wrap; /* Allows wrapping and preserves line breaks */
+    word-wrap: break-word; /* Ensure long words break */
+}
+
+
+#outlineContainer li > p:focus {
+    border: 1px dashed #aaa; /* Simple focus indicator */
+    background-color: #f9f9f9;
+}
+
+/* --- Item Type Styling (Mostly unchanged, ensure HR styling is robust) --- */
+
+#outlineContainer li[data-type="heading"] > p {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-top: 0.5em;
+}
+
+#outlineContainer li[data-type="note"] {
+    color: #555;
+    font-style: italic;
+}
+#outlineContainer li[data-type="note"] > p::before {
+    content: "» "; /* Example indicator */
+    color: #aaa;
+    margin-right: 0.3em;
+}
+
+
+#outlineContainer li[data-type="task"] > p::before {
+    content: "☐ "; /* Simple task indicator */
+    cursor: pointer; /* Might add JS later to toggle */
+    margin-right: 0.3em;
+}
+/* Add [data-done="true"] later for checked tasks */
+/* #outlineContainer li[data-type="task"][data-done="true"] > p::before { content: "☑ "; } */
+
+
+#outlineContainer li[data-type="ordered"] {
+    /* Basic visual cue, could use CSS counters for real numbers */
+}
+#outlineContainer li[data-type="ordered"] > p::before {
+    content: "1. "; /* Very basic indicator, doesn't auto-number */
+    font-weight: bold;
+    margin-right: 0.3em;
+}
+
+
+#outlineContainer li[data-type="unordered"]::before {
+    content: '•'; /* Or use standard list-style-type on ul */
+    position: absolute;
+    left: -15px; /* Adjust based on padding */
+    top: 5px; /* Align with text */
+}
+
+#outlineContainer li[data-type="hr"] > p {
+    display: none; /* Hide the paragraph */
+}
+#outlineContainer li[data-type="hr"] {
+    height: 1px;
+    background-color: #ccc;
+    margin: 1em 0;
+    list-style: none; /* Remove bullet */
+    padding: 0;
+}
+#outlineContainer li[data-type="hr"]::before {
+    content: none; /* Remove bullet if applied generally */
+}
+
+
+/* --- Formatting (Unchanged) --- */
+mark { background-color: yellow; padding: 0.1em 0.2em; }
+code { font-family: monospace; background-color: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; }
+
+/* --- Selection Highlight --- */
+#outlineContainer li.selected > p {
+    background-color: #e0f0ff; /* Highlight selected item */
+}
+
+/* --- Mobile Responsiveness (Unchanged, but test) --- */
+@media (max-width: 600px) {
+    header {
+        flex-direction: column;
+        align-items: stretch; /* Make buttons full width */
+    }
+     header > div {
+         justify-content: center;
+         width: 100%;
+     }
+    header h1 {
+        text-align: center;
+        width: 100%;
+    }
+    #toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #toolbar button {
+        text-align: center;
+    }
+     #outlineContainer ul {
+        padding-left: 15px; /* Reduce indent on mobile */
+    }
+     /* Adjust nested padding */
+    #outlineContainer ul ul { padding-left: 15px; }
+    #outlineContainer ul ul ul { padding-left: 15px; }
+    #outlineContainer ul ul ul ul { padding-left: 15px; }
+
+    #outlineContainer li[data-type="unordered"]::before {
+        left: -10px; /* Adjust bullet position */
+    }
+}
