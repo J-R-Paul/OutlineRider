@@ -366,7 +366,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function fixFileName(name, defaultExt = '.bike') { /* ... (no changes) ... */ }
 
-    function saveFileAsDownload() { /* ... (no changes) ... */ }
+    function saveFileAsDownload() {
+        console.log("Attempting to save file as download...");
+        if (!rootUlElement) {
+            alert("Nothing to save. Create some content first.");
+            return;
+        }
+        
+        // Get content and filename
+        const htmlContent = serializeOutlineToHTML();
+        if (!htmlContent) {
+            alert("Failed to prepare content for download. Please try again.");
+            return;
+        }
+        
+        // Determine a sensible filename
+        let suggestedName = "outline.bike";
+        if (currentFileSource === 'direct' && directFileHandle?.name) {
+            suggestedName = directFileHandle.name;
+        } else if (currentFileNameSpan.textContent) {
+            const currentName = currentFileNameSpan.textContent
+                .replace('*', '')
+                .replace(' (copy)', '')
+                .replace(' (new)', '')
+                .trim();
+            
+            if (currentName && currentName !== 'No file' && currentName !== 'Unsaved Draft' && currentName !== 'App Storage') {
+                suggestedName = currentName;
+            }
+        }
+        
+        // Ensure .bike extension
+        if (!suggestedName.toLowerCase().endsWith('.bike')) {
+            suggestedName = fixFileName(suggestedName, '.bike');
+        }
+        
+        // Create blob for download
+        const blob = new Blob([htmlContent], { type: 'application/xhtml+xml' });
+        
+        // Use download attribute for modern browsers
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = suggestedName;
+        
+        // Append to body, click, and remove (for browser compatibility)
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(downloadLink.href);
+            console.log(`Download triggered for: ${suggestedName}`);
+        }, 100);
+    }
 
     // --- Standard File System Access API ---
 
@@ -481,8 +534,53 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { console.error("Error preparing OPFS save (getting handle):", err); alert(`Could not prepare file for saving to App Storage: ${err.message}`); setSavingIndicator('saveToOpfsButton', false); persistentOpfsHandle = null; updateFileStateUI(); }
     }
 
-    function handleWorkerMessage(event) { /* ... (no changes) ... */ }
-    function setSavingIndicator(buttonId, isSaving, message = null) { /* ... (no changes) ... */ }
+    function handleWorkerMessage(event) {
+        const { success, fileName, error, name } = event.data;
+        console.log(`Worker message received. Success: ${success}, File: ${fileName || 'unknown'}`);
+        
+        if (fileName === PERSISTENT_OPFS_FILENAME) {
+            if (success) {
+                console.log(`Worker reported success saving ${fileName}`);
+                markAsClean();
+                // Show success message on button for a brief period
+                setSavingIndicator('saveToOpfsButton', false, 'Saved!');
+                // Reset button to normal after a delay
+                setTimeout(() => {
+                    setSavingIndicator('saveToOpfsButton', false);
+                }, 2000);
+            } else {
+                console.error(`Worker reported error saving ${fileName}:`, error, name);
+                setSavingIndicator('saveToOpfsButton', false);
+                alert(`Failed to save to App Storage:\n${error}`);
+            }
+        } else {
+            console.log(`Worker message for unknown file: ${fileName}`);
+        }
+    }
+
+    function setSavingIndicator(buttonId, isSaving, message = null) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+        
+        const originalText = button.getAttribute('data-original-text') || button.textContent;
+        
+        if (isSaving) {
+            button.setAttribute('data-original-text', originalText);
+            button.textContent = message || 'Saving...';
+            button.disabled = true;
+        } else {
+            if (message) {
+                // If message provided, show it temporarily
+                button.textContent = message;
+                button.classList.add('save-success');
+            } else {
+                // Otherwise restore original text
+                button.textContent = originalText;
+                button.classList.remove('save-success');
+            }
+            button.disabled = false;
+        }
+    }
 
     // --- Local Storage (Draft) Functions ---
 
