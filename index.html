@@ -3,26 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bike File Editor</title>
+    <title>Bike File Editor (Web)</title> <!-- Slightly different title -->
     <link rel="stylesheet" href="style.css">
+    <!-- Add basic PWA manifest link and icons if desired for homescreen saving -->
+    <!-- <link rel="manifest" href="manifest.json"> -->
+    <!-- <link rel="apple-touch-icon" href="icons/icon-192x192.png"> -->
 </head>
 <body>
     <header>
-        <h1>Bike File Editor</h1>
+        <h1>Bike File Editor (Web)</h1>
         <!-- File Handling Options -->
         <div>
-            <label for="fileInput">Load (Copy):</label>
+            <label for="fileInput">Load (Copy from Device):</label>
             <input type="file" id="fileInput"
                    accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
                    aria-label="Load Bike File (Creates Copy)">
         </div>
-        <div id="directFileAccess" style="display: none;"> <!-- Show only if API is supported -->
-             <button id="openDirectButton">Open File (Direct Edit)</button>
+        <!-- OPFS Buttons - Shown only if API is supported -->
+        <div id="opfsFileAccess" style="display: none;">
+             <button id="manageOpfsButton" title="Open or manage files saved within this app's storage">Manage App Files</button>
              <span id="currentFileName">No file open</span>
-             <button id="saveDirectButton" disabled>Save Directly</button>
+             <button id="saveToOpfsButton" disabled title="Save changes to the file currently open in app storage">Save to App Storage</button>
         </div>
-         <button id="saveAsButton">Save As / Download</button> <!-- Renamed original save -->
-         <button id="clearLocalButton" title="Clear the draft saved in your browser storage">Clear Local Draft</button>
+        <!-- Standard Download Button -->
+        <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
+        <button id="clearLocalButton" title="Clear the temporary draft saved in your browser storage">Clear Temp Draft</button>
 
     </header>
 
@@ -52,10 +57,20 @@
     </div>
 
     <main id="outlineContainer" tabindex="0"> <!-- Add tabindex to make container focusable -->
-        <p>Load or Open a .bike file to start editing.</p>
-        <p>Use <b>Enter</b> for new item, <b>Shift+Enter</b> for line break, <b>Tab</b> to indent, <b>Shift+Tab</b> to outdent.</p>
+        <!-- Initial Instructions -->
+        <div id="initialMessage">
+            <p>Welcome! Choose an option:</p>
+            <ul>
+                <li><b>Load (Copy from Device):</b> Open a .bike or .html file from your computer/phone. Changes are not saved back automatically. Use "Save As / Download" to get a copy.</li>
+                <li id="opfsInfo" style="display: none;"><b>Manage App Files:</b> Open, create, or delete files stored privately by this web app in your browser (ideal for Safari/iOS).</li>
+                <li><b>Save As / Download:</b> Download the current outline as a file.</li>
+                <li><b>Clear Temp Draft:</b> Remove the auto-saved draft from browser storage.</li>
+            </ul>
+            <p><b>Editing Basics:</b> Use <b>Enter</b> for new item, <b>Shift+Enter</b> for line break, <b>Tab</b> to indent, <b>Shift+Tab</b> to outdent.</p>
+        </div>
     </main>
 
+    <script src="worker.js" defer></script> <!-- Load worker script -->
     <script src="script.js"></script>
 </body>
 </html>

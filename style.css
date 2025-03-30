@@ -299,3 +299,33 @@ a:hover {
         padding: 10px; /* Reduce padding */
     }
 }
+
+/* style.css - (Keep existing styles) */
+
+/* Add if needed: */
+#initialMessage {
+    padding: 20px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+    color: #333;
+}
+
+#initialMessage ul {
+    list-style-type: none; /* Or disc/circle if preferred */
+    padding-left: 0;
+    margin-top: 10px;
+}
+
+#initialMessage li {
+     margin-bottom: 8px;
+     padding-left: 0; /* Reset padding if needed */
+}
+#initialMessage li::before {
+    content: none; /* Remove default list item bullets */
+}
+
+#initialMessage b {
+    color: #111;
+}
