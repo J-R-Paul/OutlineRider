@@ -28,9 +28,17 @@
             "files": [
             {
                 "name": "bikeFile",
-                "accept": [".bike", "application/xhtml+xml"]
+                "accept": [".bike", ".xhtml", "application/xhtml+xml"]
             }
             ]
         }
-    }   
-  }
+    },
+    "file_handlers": [
+      {
+        "action": "/",
+        "accept": {
+          "application/xhtml+xml": [".bike", ".xhtml"]
+        }
+      }
+    ]
+}

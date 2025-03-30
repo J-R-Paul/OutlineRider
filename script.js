@@ -319,10 +319,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!await checkUnsavedChanges(`load '${file.name}'`)) {
             fileInput.value = ''; return;
         }
-        console.log(`Loading file from input (as copy): ${file.name}`);
+        
+        // Log filename and type for debugging
+        console.log(`Loading file from input (as copy): ${file.name}, type: ${file.type}`);
+        
         directFileHandle = null;
         persistentOpfsHandle = null;
-        await loadFileContent(file, file.name, 'copy'); // Manages isLoading
+        
+        // Check for .xhtml extension for iOS compatibility
+        const displayName = file.name.replace(/\.xhtml$/, '.bike');
+        await loadFileContent(file, displayName, 'copy'); // Manages isLoading
         fileInput.value = '';
     }
 
@@ -394,16 +400,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const invalidChars = /[\\/:*?"<>|]/g;
         name = name.replace(invalidChars, '');
         
-        // Ensure it ends with the correct extension
-        if (!name.toLowerCase().endsWith(defaultExt.toLowerCase())) {
-            // Remove any existing extension
-            name = name.replace(/\.[^/.]+$/, '');
-            name += defaultExt;
+        // iOS handling - detect if we're on iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        // For iOS, use .xhtml extension instead of .bike to avoid double extension
+        const fileExtension = isIOS ? '.xhtml' : defaultExt;
+        
+        // Remove any existing extensions (.bike, .xhtml, etc.)
+        name = name.replace(/\.(bike|xhtml|html|xml)$/i, '');
+        
+        // Add the appropriate extension
+        if (!name.toLowerCase().endsWith(fileExtension.toLowerCase())) {
+            name += fileExtension;
         }
         
         // Provide a fallback if name is empty after cleaning
-        if (!name || name === defaultExt) {
-            name = `outline${defaultExt}`;
+        if (!name || name === fileExtension) {
+            name = `outline${fileExtension}`;
         }
         
         return name;
@@ -439,12 +452,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Ensure .bike extension using the fixFileName function
-        suggestedName = fixFileName(suggestedName, '.bike');
+        // Ensure proper extension using the updated fixFileName function
+        suggestedName = fixFileName(suggestedName);
         console.log(`Saving as: ${suggestedName}`);
         
-        // Create blob for download
-        const blob = new Blob([htmlContent], { type: 'application/xhtml+xml' });
+        // Detect content type based on filename extension
+        const isXHTML = suggestedName.toLowerCase().endsWith('.xhtml');
+        
+        // Create blob for download - use correct MIME type
+        const contentType = isXHTML ? 'application/xhtml+xml' : 'application/xhtml+xml';
+        const blob = new Blob([htmlContent], { type: contentType });
         
         // Use download attribute for modern browsers
         const downloadLink = document.createElement('a');
@@ -468,24 +485,110 @@ document.addEventListener('DOMContentLoaded', () => {
     async function openFileDirectly() {
         if (isLoading) { console.warn("Open direct rejected, already loading."); return; }
         console.log("Attempting to open file directly (Standard FSA)...");
-         if (!('showOpenFilePicker' in window)) return alert("Direct file editing is not supported by this browser.");
+        if (!('showOpenFilePicker' in window)) return alert("Direct file editing is not supported by this browser.");
         if (!await checkUnsavedChanges("open a new direct file")) return;
 
         try {
-            const [handle] = await window.showOpenFilePicker({ /* ... types ... */ });
+            // Update types to include .xhtml files
+            const [handle] = await window.showOpenFilePicker({
+                types: [
+                    {
+                        description: 'Bike Outline Files',
+                        accept: {
+                            'application/xhtml+xml': ['.bike', '.xhtml'],
+                            'text/xml': ['.bike', '.xhtml']
+                        }
+                    }
+                ]
+            });
             console.log("Direct file handle obtained:", handle.name);
             const file = await handle.getFile();
             directFileHandle = handle; // Store handle
             persistentOpfsHandle = null; // Clear OPFS target
-            await loadFileContent(file, handle.name, 'direct'); // Manages isLoading
-            // Check if load succeeded? loadFileContent resets state on failure.
-             updateFileStateUI();
+            
+            // Use the raw filename from the handle but normalize display if needed
+            const displayName = handle.name.replace(/\.xhtml$/, '.bike');
+            await loadFileContent(file, displayName, 'direct'); // Manages isLoading
+            updateFileStateUI();
         } catch (err) { /* ... error handling ... */ }
     }
 
-    async function saveFileDirectly() { /* ... (no changes) ... */ }
+    async function saveFileDirectly() {
+        if (isLoading) { console.warn("Save direct rejected, already loading."); return; }
+        console.log("Attempting to save file directly (Standard FSA)...");
+        if (!directFileHandle) { alert("No file handle available. Use 'Open File' first or 'Save As'."); return; }
+        if (!('createWritable' in FileSystemFileHandle.prototype)) { alert("Write access is not supported by this browser."); return; }
+        
+        // Ensure we have permission to write to the file
+        if (!(await verifyPermission(directFileHandle, true))) {
+            alert("Write permission denied. Please try again and allow access.");
+            return;
+        }
+        
+        const htmlContent = serializeOutlineToHTML();
+        if (htmlContent === null) {
+            alert("Failed to prepare content for saving. Please try again.");
+            return;
+        }
+        
+        setSavingIndicator('saveDirectButton', true, 'Saving...');
+        
+        try {
+            console.log(`Creating writable for ${directFileHandle.name}...`);
+            const writable = await directFileHandle.createWritable();
+            await writable.write(htmlContent);
+            await writable.close();
+            
+            console.log(`File saved successfully: ${directFileHandle.name}`);
+            markAsClean();
+            
+            // Show success message briefly
+            setSavingIndicator('saveDirectButton', false, 'Saved!');
+            setTimeout(() => {
+                setSavingIndicator('saveDirectButton', false);
+            }, 2000);
+        } catch (err) {
+            console.error("Error saving file:", err);
+            setSavingIndicator('saveDirectButton', false);
+            alert(`Failed to save file: ${err.message}`);
+        }
+    }
 
-    async function verifyPermission(fileHandle, readWrite) { /* ... (no changes) ... */ }
+    async function verifyPermission(fileHandle, readWrite) {
+        if (!fileHandle) {
+            console.error("No file handle provided for permission check");
+            return false;
+        }
+
+        // Check if we already have permission
+        let options = {};
+        if (readWrite) {
+            options = { mode: 'readwrite' };
+        } else {
+            options = { mode: 'read' };
+        }
+
+        // Check if permission was already granted
+        if ((await fileHandle.queryPermission(options)) === 'granted') {
+            console.log("Permission already granted for this file handle");
+            return true;
+        }
+
+        // Request permission if not already granted
+        try {
+            console.log(`Requesting ${readWrite ? 'read/write' : 'read'} permission for file handle`);
+            if ((await fileHandle.requestPermission(options)) === 'granted') {
+                console.log("Permission granted");
+                return true;
+            } else {
+                console.warn("Permission denied by user");
+                return false;
+            }
+        } catch (error) {
+            console.error("Error requesting permission:", error);
+            return false;
+        }
+    }
 
     // --- OPFS File Handling ---
 

@@ -45,7 +45,7 @@
                 <label for="fileInput" class="file-input-label" title="Load content from a file (will overwrite App Storage on next save)">
                     Load Copy
                     <input type="file" id="fileInput"
-                           accept=".bike,.html,application/xhtml+xml,text/xml,application/xml"
+                           accept=".bike,.xhtml,.html,application/xhtml+xml,text/xml,application/xml"
                            aria-label="Load Bike File (Creates Copy)">
                 </label>
                  <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
@@ -99,6 +99,6 @@
     <!-- Worker script -->
     <script src="worker.js" defer></script>
     <!-- Main script -->
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
