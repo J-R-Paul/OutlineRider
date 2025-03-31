@@ -13,6 +13,8 @@ const State = (() => {
     let currentlyDraggedLi = null; // For drag & drop state
     let lastDropTarget = null;    // For drag & drop state
     let lastDropPosition = null;  // For drag & drop state
+    let selectedItems = []; // Array of selected li elements
+    let selectionAnchor = null; // First item in a multi-selection sequence
 
     // --- Getters ---
     const getRootElement = () => rootUlElement;
@@ -28,6 +30,8 @@ const State = (() => {
     const getCurrentlyDraggedLi = () => currentlyDraggedLi;
     const getLastDropTarget = () => lastDropTarget;
     const getLastDropPosition = () => lastDropPosition;
+    const getSelectedItems = () => selectedItems.filter(item => document.body.contains(item)); // Filter out any removed elements
+    const getSelectionAnchor = () => (selectionAnchor && document.body.contains(selectionAnchor)) ? selectionAnchor : null;
 
     // --- Setters ---
     const setRootElement = (element) => { rootUlElement = element; };
@@ -41,6 +45,15 @@ const State = (() => {
              currentlySelectedLi.classList.add('selected');
              if (currentlySelectedLi.getAttribute('data-type') === 'hr') currentlySelectedLi.tabIndex = 0;
         }
+        
+        // Reset multi-selection when setting a single selection
+        clearMultiSelection();
+        
+        // Make the new selected item the anchor for future shift selections
+        if (currentlySelectedLi) {
+            selectionAnchor = currentlySelectedLi;
+            selectedItems = [currentlySelectedLi];
+        }
     };
     const setDirectFileHandle = (handle) => { directFileHandle = handle; };
     const setPersistentOpfsHandle = (handle) => { persistentOpfsHandle = handle; };
@@ -53,6 +66,49 @@ const State = (() => {
     const setCurrentlyDraggedLi = (li) => { currentlyDraggedLi = li; };
     const setLastDropTarget = (li) => { lastDropTarget = li; };
     const setLastDropPosition = (pos) => { lastDropPosition = pos; };
+
+    // --- Multi-selection functions ---
+    const clearMultiSelection = () => {
+        // Remove visual styling from previously selected items
+        selectedItems.forEach(item => {
+            if (item && document.body.contains(item) && item !== currentlySelectedLi) {
+                item.classList.remove('selected', 'multi-selected');
+            }
+        });
+        selectedItems = currentlySelectedLi ? [currentlySelectedLi] : [];
+    };
+    
+    const addToSelection = (liElement) => {
+        if (!liElement || !document.body.contains(liElement)) return false;
+        
+        // Skip if already in the selection
+        if (selectedItems.includes(liElement)) return false;
+        
+        // Add to selection
+        selectedItems.push(liElement);
+        liElement.classList.add('selected', 'multi-selected');
+        return true;
+    };
+    
+    const removeFromSelection = (liElement) => {
+        if (!liElement || !selectedItems.includes(liElement)) return false;
+        
+        // Remove from array
+        const index = selectedItems.indexOf(liElement);
+        if (index > -1) {
+            selectedItems.splice(index, 1);
+        }
+        
+        // Update visual state
+        if (document.body.contains(liElement)) {
+            liElement.classList.remove('selected', 'multi-selected');
+        }
+        return true;
+    };
+    
+    const setSelectionAnchor = (liElement) => {
+        selectionAnchor = (liElement && document.body.contains(liElement)) ? liElement : null;
+    };
 
     // --- State Change Actions ---
     const markAsClean = () => {
@@ -92,6 +148,8 @@ const State = (() => {
         getCurrentlyDraggedLi,
         getLastDropTarget,
         getLastDropPosition,
+        getSelectedItems,
+        getSelectionAnchor,
 
         // Setters
         setRootElement,
@@ -110,6 +168,12 @@ const State = (() => {
 
         // Actions
         markAsClean,
-        markAsDirty
+        markAsDirty,
+
+        // Multi-selection functions
+        clearMultiSelection,
+        addToSelection,
+        removeFromSelection,
+        setSelectionAnchor,
     };
 })();

@@ -105,7 +105,11 @@ const Editor = (() => {
 </html>`;
         }
 
-        // Ensure focus is removed from editable elements before cloning
+        // Save focus and selection state before cloning
+        const activeElement = document.activeElement;
+        const selectionInfo = FileSystem.saveSelectionState();
+        
+        // Ensure focus is removed from editable elements before cloning, but track where it was
         if (document.activeElement?.isContentEditable) {
              document.activeElement.blur();
         }
@@ -226,6 +230,11 @@ const Editor = (() => {
         } catch (validationError) {
             console.error("Error during serialization validation:", validationError);
             // Allow saving even if validation throws an error, but log it.
+        }
+
+        // Restore focus after serialization is complete
+        if (activeElement && document.body.contains(activeElement)) {
+            FileSystem.restoreFocusAndSelection(activeElement, selectionInfo);
         }
 
         return finalHtml;

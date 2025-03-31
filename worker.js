@@ -1,133 +1,112 @@
-// worker.js
+// OutlineRider Web Worker
+// This worker handles background file operations for the OPFS (Origin Private File System)
 
 self.onmessage = async (event) => {
-    const { action, fileName, content, isBeforeUnload, operationId } = event.data;
+    const { action, fileName, content, operationId } = event.data;
 
-    if (action === 'saveOpfs') {
-        if (!fileName || typeof content === 'undefined') {
-             console.error('Worker: Missing fileName or content for saveOpfs.');
-             self.postMessage({ success: false, error: 'Worker: Missing fileName or content.', fileName: fileName, operationId });
-             return;
-        }
-        console.log(`Worker: ---- Starting saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''} ----`);
+    console.log(`Worker: Received message with action: ${action}, fileName: ${fileName || 'N/A'}`);
 
-        // If this is a beforeUnload save, we might want to prioritize it
-        const isPrioritySave = isBeforeUnload === true;
-        
-        let accessHandle = null;
-        let fileHandle = null; // Keep track of the file handle too
-        try {
-            // Get root directory *inside worker*
-            console.log("Worker: Getting storage directory...");
+    try {
+        if (action === 'saveOpfs') {
+            console.log(`Worker: Saving to OPFS: ${fileName}`);
+            
+            // Get root directory
             const root = await navigator.storage.getDirectory();
-            console.log("Worker: Storage directory obtained.");
-
-            // Get file handle *inside worker* - ensure creation if it doesn't exist
-            console.log(`Worker: Getting file handle for ${fileName} (create: true)...`);
-            fileHandle = await root.getFileHandle(fileName, { create: true });
-            console.log(`Worker: File handle for ${fileName} obtained. Kind: ${fileHandle.kind}, Name: ${fileHandle.name}`);
-
-            // Create SyncAccessHandle
-            console.log(`Worker: Creating sync access handle for ${fileName}...`);
-            accessHandle = await fileHandle.createSyncAccessHandle();
-            console.log("Worker: Sync access handle created.");
-
-            // Encode content to buffer
-            const encoder = new TextEncoder(); // UTF-8 by default
-            const encodedContent = encoder.encode(content);
-            const writeSize = encodedContent.byteLength;
-            console.log(`Worker: Encoded content size: ${writeSize} bytes.`);
-
-            // Truncate the file to 0 bytes *before* writing new content
-            console.log(`Worker: Truncating ${fileName} to 0 bytes...`);
-            accessHandle.truncate(0);
-            console.log(`Worker: Truncate command issued for ${fileName}.`);
-
-            // Write the new content starting at the beginning
-            console.log(`Worker: Writing ${writeSize} bytes to ${fileName} at offset 0...`);
-            const bytesWritten = accessHandle.write(encodedContent, { "at": 0 });
-            console.log(`Worker: Write command issued for ${fileName}. Reported bytes written: ${bytesWritten}`);
-             if (bytesWritten !== writeSize) {
-                  console.warn(`Worker: Mismatch between expected write size (${writeSize}) and reported bytes written (${bytesWritten}).`);
-             }
-
-            // If this was a beforeUnload save, we should try to flush as aggressively as possible
-            if (isPrioritySave) {
-                console.log(`Worker: Priority flush for beforeUnload save of ${fileName}...`);
-                try {
-                    accessHandle.flush();
-                    console.log(`Worker: Priority flush completed for ${fileName}.`);
-                } catch (flushError) {
-                    console.error(`Worker: Error during priority flush: ${flushError}`);
+            
+            // Get or create the file handle
+            const fileHandle = await root.getFileHandle(fileName, { create: true });
+            
+            // Try multiple approaches to write the file based on available APIs
+            try {
+                // Method 1: Use modern createWritable API if available
+                if (typeof fileHandle.createWritable === 'function') {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    console.log(`Worker: File saved using createWritable API: ${fileName}`);
+                } 
+                // Method 2: Fall back to direct write method
+                else {
+                    // Create a text encoder to convert string to binary
+                    const encoder = new TextEncoder();
+                    const encodedContent = encoder.encode(content);
+                    
+                    // Create a blob of the content
+                    const blob = new Blob([encodedContent], { type: 'application/xhtml+xml' });
+                    
+                    // Open a writable file stream (older API)
+                    const file = await fileHandle.createWriter();
+                    // Truncate any existing content
+                    await file.truncate(0);
+                    // Write the new content
+                    await file.write(0, blob);
+                    // Close the file
+                    await file.close();
+                    
+                    console.log(`Worker: File saved using direct write method: ${fileName}`);
                 }
-            } else {
-                console.log(`Worker: Standard flushing changes for ${fileName}...`);
-                accessHandle.flush();
-                console.log(`Worker: Flush command issued for ${fileName}.`);
-            }
-
-            // Optional: Get file size *after* flush (though may not be guaranteed sync)
-            // try {
-            //     const sizeAfterFlush = accessHandle.getSize();
-            //     console.log(`Worker: Size after flush reported by access handle: ${sizeAfterFlush}`);
-            //     if (sizeAfterFlush !== writeSize) {
-            //          console.warn(`Worker: Size mismatch after flush! Expected ${writeSize}, got ${sizeAfterFlush}.`);
-            //     }
-            // } catch (getSizeError) {
-            //     console.warn("Worker: Could not get size from access handle after flush:", getSizeError);
-            // }
-
-            // Close the access handle to release the lock
-            console.log(`Worker: Closing access handle for ${fileName}...`);
-            accessHandle.close();
-            accessHandle = null; // Mark as closed
-            console.log(`Worker: Access handle for ${fileName} closed.`);
-
-            console.log(`Worker: ---- Successfully completed saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''} ----`);
-            // Send success message back
-            self.postMessage({
-                action: 'saveOpfs',  // Include the action in response
-                success: true,
-                fileName: fileName,
-                isBeforeUnload: isPrioritySave,
-                operationId // Echo back the operation ID if provided
-            });
-
-        } catch (error) {
-            console.error(`Worker: !!!! Error during saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''}: !!!!`, error);
-            console.error(`Worker: Error Name: ${error.name}`);
-            console.error(`Worker: Error Message: ${error.message}`);
-            // Attempt to close handle even on error
-            if (accessHandle) {
+                
+                // Send success message back to main thread
+                self.postMessage({ 
+                    fileName, 
+                    success: true, 
+                    action,
+                    operationId // Echo back the operation ID if provided
+                });
+            } 
+            catch (writeError) {
+                console.error(`Worker: Error writing to file ${fileName} using standard APIs:`, writeError);
+                
+                // Method 3: Last resort - atomic file write
                 try {
-                    console.warn("Worker: Attempting to close access handle after error...");
+                    const encoder = new TextEncoder();
+                    const encodedContent = encoder.encode(content);
+                    
+                    // Try to use an atomic write operation
+                    await root.removeEntry(fileName).catch(() => {}); // Remove if exists
+                    const newFileHandle = await root.getFileHandle(fileName, { create: true });
+                    
+                    // Get access to the file for writing
+                    const accessHandle = await newFileHandle.createSyncAccessHandle();
+                    const bytesWritten = accessHandle.write(encodedContent, 0);
+                    await accessHandle.flush();
                     accessHandle.close();
-                    console.log("Worker: Access handle closed after error.");
-                 } catch (closeError) { console.error("Worker: Error closing access handle after primary error:", closeError); }
-            } else {
-                 console.warn("Worker: No access handle to close after error.");
+                    
+                    console.log(`Worker: File saved using atomic write: ${fileName}, bytes: ${bytesWritten}`);
+                    
+                    self.postMessage({ 
+                        fileName, 
+                        success: true, 
+                        action,
+                        operationId
+                    });
+                }
+                catch (atomicError) {
+                    console.error(`Worker: All file writing methods failed for ${fileName}:`, atomicError);
+                    throw new Error(`Failed to write file after trying multiple methods: ${writeError.message}, then: ${atomicError.message}`);
+                }
             }
-            // Try to provide a more specific error message
-            let errorMessage = error.message || 'An unknown error occurred during save.';
-            if (error.name === 'NoModificationAllowedError') {
-                 errorMessage = 'Could not write to file. It might be locked or permissions changed.';
-            } else if (error.name === 'QuotaExceededError') {
-                errorMessage = 'Storage quota exceeded. Cannot save file.';
-            } else if (error.name === 'TypeError' && error.message.includes('detached')) {
-                errorMessage = 'Buffer became detached during operation. This might be an internal browser issue.';
-            } else if (error.name === 'InvalidStateError') {
-                 errorMessage = 'Invalid state, possibly due to rapid operations or closed handle.';
-            }
+        } else {
+            console.warn(`Worker: Unknown action: ${action}`);
             self.postMessage({ 
+                fileName, 
                 success: false, 
-                error: `Worker error saving ${fileName}: ${errorMessage}`, 
-                name: error.name, 
-                fileName: fileName,
-                operationId // Echo back the operation ID if provided
+                error: `Unknown action: ${action}`,
+                action,
+                operationId
             });
         }
-    } else {
-        console.warn('Worker: Unknown action received:', action);
-        self.postMessage({ success: false, error: `Unknown action: ${action}`, operationId });
+    } catch (error) {
+        console.error(`Worker: Error processing ${action} for ${fileName}:`, error);
+        self.postMessage({ 
+            fileName, 
+            success: false, 
+            error: error.message || String(error),
+            action,
+            operationId
+        });
     }
 };
+
+// Send ready message
+self.postMessage({ ready: true, message: 'Worker initialized' });

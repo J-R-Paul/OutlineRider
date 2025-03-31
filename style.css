@@ -460,6 +460,37 @@ a:hover { text-decoration: underline; }
      outline-offset: 2px;
 }
 
+/* Multi-selection styles - Make more distinctive */
+#outlineContainer li.multi-selected > p {
+    background-color: rgba(207, 226, 255, 0.8); /* Lighter blue for multi-select */
+    border-color: #9ec5fe;
+    box-shadow: 0 0 0 1px #9ec5fe; /* Add subtle highlight */
+}
+#outlineContainer li[data-type="hr"].multi-selected {
+    outline: 2px solid #9ec5fe;
+    outline-offset: 2px;
+    background-color: #e7f0ff; /* Slightly highlight HR too */
+}
+
+/* Feedback animation when items are copied */
+@keyframes copyFlash {
+    0% { box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.3); }
+    70% { box-shadow: 0 0 0 4px rgba(13, 110, 253, 0); }
+    100% { box-shadow: none; }
+}
+#outlineContainer li.copy-flash {
+    animation: copyFlash 0.3s ease-out;
+}
+
+/* Prevent text selection during drag-selection to avoid conflict */
+#outlineContainer.selecting {
+    user-select: none;
+    cursor: crosshair !important;
+}
+#outlineContainer.selecting li {
+    cursor: crosshair !important;
+}
+
 /* --- Mobile Responsiveness --- */
 @media (max-width: 768px) { /* Standard bootstrap breakpoint */
     header {

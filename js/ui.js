@@ -3,12 +3,15 @@ const UI = (() => {
     // --- DOM Elements ---
     let elements = {}; // Cache elements
     let dragDropIndicator = null;
+    let isDraggingSelection = false;
+    let lastDraggedOver = null;
+    let mouseDownInOutline = false;
 
     // --- Initialization ---
     const initialize = () => {
         cacheElements();
         setupInitialVisibility();
-        // Event listeners will be setup by App.js calling specific setup functions here
+        setupMultiSelectionHandlers();
         console.log("UI Initialized.");
     };
 
@@ -39,6 +42,239 @@ const UI = (() => {
          elements.directInfoLi.style.display = 'none';
          elements.opfsInfoLi.style.display = 'none';
          elements.opfsInfoLi2.style.display = 'none';
+    };
+
+    // --- Multi-selection handling ---
+    const setupMultiSelectionHandlers = () => {
+        // Mousedown within outline to start drag selection
+        elements.outlineContainer.addEventListener('mousedown', handleOutlineMouseDown);
+        
+        // Global mouse move/up for drag selection
+        document.addEventListener('mousemove', handleDocumentMouseMove);
+        document.addEventListener('mouseup', handleDocumentMouseUp);
+        
+        // Handle clicks within outline for shift+click selection
+        elements.outlineContainer.addEventListener('click', handleOutlineClick);
+        
+        // Prevent selection of non-LI elements during drag
+        elements.outlineContainer.addEventListener('dragstart', e => {
+            if (isDraggingSelection) {
+                e.preventDefault(); // Prevent drag operations during selection
+            }
+        });
+        
+        // Copy event handler for multi-selection
+        document.addEventListener('copy', handleCopyEvent);
+        
+        console.log("Multi-selection handlers initialized");
+    };
+
+    const handleOutlineMouseDown = (event) => {
+        // Ignore if button isn't left mouse button
+        if (event.button !== 0) return;
+        
+        // Check if click is on a list item but not on focusable elements
+        const closestLi = event.target.closest('li');
+        if (!closestLi) return;
+        
+        // Prevent selection if clicking on interactive elements
+        if (event.target.closest('a, button, .fold-toggle, .task-checkbox') || 
+            event.target.isContentEditable || 
+            ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(event.target.tagName)) {
+            return;
+        }
+        
+        // Store initial mouse position for movement detection
+        mouseDownInOutline = true;
+        const initialX = event.clientX;
+        const initialY = event.clientY;
+        
+        // Set data attributes on the container for later comparison in mousemove
+        elements.outlineContainer.dataset.initialMouseX = initialX;
+        elements.outlineContainer.dataset.initialMouseY = initialY;
+        
+        // Handle shift-click for range selection
+        if (event.shiftKey && State.getSelectionAnchor()) {
+            event.preventDefault(); // Prevent text selection
+            selectItemRange(State.getSelectionAnchor(), closestLi);
+            return;
+        }
+        
+        // Start new selection if not extending with shift
+        if (!event.ctrlKey && !event.metaKey) {
+            State.clearMultiSelection();
+            selectAndFocusItem(closestLi, false); // Single selection
+            State.setSelectionAnchor(closestLi);
+        } else {
+            // Ctrl/Cmd+click for toggling individual items
+            event.preventDefault();
+            toggleItemSelection(closestLi);
+        }
+        
+        // Prepare for potential drag selection
+        lastDraggedOver = closestLi;
+    };
+
+    const handleDocumentMouseMove = (event) => {
+        if (!mouseDownInOutline) return;
+        
+        // Get initial mouse position from data attributes
+        const initialX = parseFloat(elements.outlineContainer.dataset.initialMouseX) || 0;
+        const initialY = parseFloat(elements.outlineContainer.dataset.initialMouseY) || 0;
+        
+        // Calculate actual movement distance
+        const moveX = Math.abs(event.clientX - initialX);
+        const moveY = Math.abs(event.clientY - initialY);
+        
+        // Detect start of drag selection with a reasonable threshold
+        const moveThreshold = 5;
+        if (!isDraggingSelection && (moveX > moveThreshold || moveY > moveThreshold)) {
+            isDraggingSelection = true;
+            console.log("Starting drag selection");
+            elements.outlineContainer.classList.add('selecting');
+        }
+        
+        if (isDraggingSelection) {
+            event.preventDefault();
+            
+            // Find item under cursor
+            const elemUnderPoint = document.elementFromPoint(event.clientX, event.clientY);
+            const targetLi = elemUnderPoint?.closest('#outlineContainer li');
+            
+            // If hovering over a new LI, update selection
+            if (targetLi && targetLi !== lastDraggedOver && elements.outlineContainer.contains(targetLi)) {
+                if (!State.getSelectionAnchor()) {
+                    State.setSelectionAnchor(targetLi);
+                }
+                
+                // Select range between anchor and current item
+                selectItemRange(State.getSelectionAnchor(), targetLi);
+                lastDraggedOver = targetLi;
+            }
+        }
+    };
+
+    const handleDocumentMouseUp = (event) => {
+        if (isDraggingSelection) {
+            event.preventDefault();
+            isDraggingSelection = false;
+            elements.outlineContainer.classList.remove('selecting');
+            console.log("Drag selection ended");
+        }
+        mouseDownInOutline = false;
+        lastDraggedOver = null;
+    };
+
+    const handleOutlineClick = (event) => {
+        // Most click handling is done in mousedown
+        // This is just for additional handling if needed
+    };
+
+    const handleCopyEvent = (event) => {
+        // Only handle copy if we have multiple selected items
+        const selectedItems = State.getSelectedItems();
+        if (selectedItems.length <= 1) return; // Let regular copy handle single selection
+        
+        // Only handle if focus is in the outline container
+        if (!elements.outlineContainer.contains(document.activeElement)) return;
+        
+        console.log(`Copy event detected with ${selectedItems.length} items selected`);
+        event.preventDefault();
+        
+        // Extract text from all selected items
+        const textContent = getSelectionText(selectedItems);
+        event.clipboardData.setData('text/plain', textContent);
+        console.log(`Copied text from ${selectedItems.length} items to clipboard`);
+        
+        // Optional: Flash items to give feedback that they were copied
+        selectedItems.forEach(item => {
+            if (item && document.body.contains(item)) {
+                item.classList.add('copy-flash');
+                setTimeout(() => item.classList.remove('copy-flash'), 300);
+            }
+        });
+    };
+
+    // Helper to get text from multiple selected items
+    const getSelectionText = (items) => {
+        if (!items || !items.length) return '';
+
+        // Sort items by DOM position for consistent output
+        const sortedItems = items.slice().sort((a, b) => {
+            return document.compareDocumentPosition(a) - document.compareDocumentPosition(b);
+        });
+
+        return sortedItems.map(item => {
+            // Get text based on item type
+            if (item.getAttribute('data-type') === 'hr') {
+                return '----------'; // Represent HR as dashes
+            } else {
+                const p = item.querySelector(':scope > p');
+                return p ? p.textContent : '';
+            }
+        }).join('\n');
+    };
+
+    // Select a range of items between start and end
+    const selectItemRange = (startLi, endLi) => {
+        if (!startLi || !endLi || !elements.outlineContainer.contains(startLi) || 
+            !elements.outlineContainer.contains(endLi)) {
+            return;
+        }
+
+        // Clear existing selection
+        State.clearMultiSelection();
+
+        // Determine if we're going forward or backward through the DOM
+        const allItems = Array.from(elements.outlineContainer.querySelectorAll('li'));
+        const startIndex = allItems.indexOf(startLi);
+        const endIndex = allItems.indexOf(endLi);
+
+        if (startIndex === -1 || endIndex === -1) return;
+
+        // Select all items in the range (inclusive)
+        const min = Math.min(startIndex, endIndex);
+        const max = Math.max(startIndex, endIndex);
+
+        // Always include the anchor in the selection
+        State.addToSelection(startLi);
+
+        // Include all LIs between min and max
+        for (let i = min; i <= max; i++) {
+            State.addToSelection(allItems[i]);
+        }
+
+        // Focus the most recently clicked item
+        focusItemForMultiSelection(endLi);
+    };
+
+    // Toggle selection of a single item (for Ctrl/Cmd+click)
+    const toggleItemSelection = (li) => {
+        if (!li || !elements.outlineContainer.contains(li)) return;
+
+        if (State.getSelectedItems().includes(li)) {
+            // Don't remove the last item
+            if (State.getSelectedItems().length > 1) {
+                State.removeFromSelection(li);
+            }
+        } else {
+            State.addToSelection(li);
+            State.setSelectionAnchor(li);
+            focusItemForMultiSelection(li);
+        }
+    };
+
+    // Focus an item for multi-selection without clearing other selections
+    const focusItemForMultiSelection = (li) => {
+        if (!li) return;
+
+        // Focus the paragraph or LI itself for HR
+        const p = li.querySelector(':scope > p');
+        if (p) {
+            p.focus();
+        } else if (li.getAttribute('data-type') === 'hr') {
+            li.focus();
+        }
     };
 
     // --- UI State Updates ---
@@ -374,6 +610,11 @@ const UI = (() => {
         getFocusedP,
         focusAndMoveCursor,
         selectAndFocusItem,
-        ensureFocusInEditableParagraph
+        ensureFocusInEditableParagraph,
+        setupMultiSelectionHandlers,
+        selectItemRange,
+        toggleItemSelection,
+        focusItemForMultiSelection,
+        getSelectionText
     };
 })();

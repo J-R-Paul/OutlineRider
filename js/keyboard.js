@@ -34,6 +34,65 @@ const Keyboard = (() => {
             return; // Stop processing after save shortcut
         }
 
+        // --- Multi-Selection Escape Key ---
+        if (event.key === 'Escape' && State.getSelectedItems().length > 1) {
+            event.preventDefault();
+            console.log("Escape pressed, clearing multi-selection");
+            // Keep only the primary selected LI
+            State.clearMultiSelection();
+            return;
+        }
+
+        // --- Arrow Keys with Shift for Multi-Selection ---
+        if (event.shiftKey && ['ArrowUp', 'ArrowDown'].includes(event.key)) {
+            const selectedItems = State.getSelectedItems();
+            if (selectedItems.length > 0) {
+                event.preventDefault();
+                
+                // Get the most recently selected item
+                const lastSelected = selectedItems[selectedItems.length - 1];
+                
+                // Find the next/previous item to select
+                let targetLi = null;
+                if (event.key === 'ArrowUp') {
+                    targetLi = Editor.findPreviousVisibleLi(lastSelected);
+                    console.log("Shift+ArrowUp: extending selection up");
+                } else { // ArrowDown
+                    targetLi = Editor.findNextVisibleLi(lastSelected);
+                    console.log("Shift+ArrowDown: extending selection down");
+                }
+                
+                // If we found a target, add/remove it from selection
+                if (targetLi) {
+                    // Make sure we have an anchor
+                    if (!State.getSelectionAnchor()) {
+                        State.setSelectionAnchor(selectedLi || lastSelected);
+                    }
+                    
+                    // Select range between anchor and target
+                    UI.selectItemRange(State.getSelectionAnchor(), targetLi);
+                    
+                    // Focus the newly selected item
+                    UI.focusItemForMultiSelection(targetLi);
+                    
+                    // Give visual feedback
+                    targetLi.classList.add('highlighted-selection');
+                    setTimeout(() => targetLi.classList.remove('highlighted-selection'), 200);
+                }
+                return; // Handled shift+arrow keys
+            }
+        }
+
+        // --- Handle Copy for Multi-Selection ---
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+            const selectedItems = State.getSelectedItems();
+            if (selectedItems.length > 1) {
+                // Let the copy event handler manage it
+                // (We've already set up a copy event handler in UI.js)
+                return;
+            }
+        }
+
         // --- Handling Empty Editor ---
         // Create first item if editor is empty and Enter is pressed
         const isEditorEffectivelyEmpty = (!rootElement || !outlineContainer.contains(rootElement) || !!UI.elements.initialMessageDiv && outlineContainer.contains(UI.elements.initialMessageDiv));
