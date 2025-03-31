@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, viewport-fit=cover">
-    <title>Bike Editor Pro</title>
+    <title>OutlineRider</title>
     <link rel="stylesheet" href="style.css">
     <!-- KaTeX for LaTeX rendering -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
@@ -14,7 +14,7 @@
     <!-- Optional: iOS specific tags for standalone appearance -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="Bike Editor">
+    <meta name="apple-mobile-web-app-title" content="OutlineRider">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 
     <!-- Add Service Worker registration script -->
@@ -32,16 +32,44 @@
         }
     </script>
 
+    <!-- PWA Installation Script -->
+    <script>
+        let deferredPrompt; // Store the install prompt event for later use
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67+ from automatically showing the prompt
+            e.preventDefault();
+            // Store the event for later use
+            deferredPrompt = e;
+            // Show the install button
+            document.getElementById('installButton').style.display = 'flex';
+        });
+
+        // Handle post-installation behavior
+        window.addEventListener('appinstalled', (evt) => {
+            // Log that the app was installed
+            console.log('OutlineRider was installed as a PWA!');
+            // Optionally hide the install button
+            document.getElementById('installButton').style.display = 'none';
+        });
+    </script>
 </head>
 <body>
     <div class="content-wrapper">
         <header>
             <div class="header-main">
-                 <h1>Bike Editor Pro</h1>
+                 <h1>OutlineRider</h1>
                  <span id="currentFileName" title="Current working file source">No file</span>
             </div>
 
             <div class="file-actions">
+                <!-- Add the install button (initially hidden) -->
+                <div class="action-group" id="installContainer">
+                    <button id="installButton" title="Install as desktop app" style="display: none; background-color: #4285f4; color: white;">
+                        Install App
+                    </button>
+                </div>
+
                 <!-- Standard File System Access (Direct Edit) -->
                 <div class="action-group" id="directFileAccess" style="display: none;">
                     <button id="openDirectButton" title="Open & edit a file directly on your device (Chrome/Edge)">Open Direct</button>
@@ -94,7 +122,7 @@
         <main id="outlineContainer" tabindex="0">
             <div id="initialMessage">
                 <!-- Initial message content remains the same -->
-                <p>Welcome to Bike Editor Pro!</p>
+                <p>Welcome to OutlineRider!</p>
                 <p>Choose how to start:</p>
                 <ul>
                     <li id="directInfo" style="display: none;"><b>Open Direct:</b> Edit files directly on your device (Chrome/Edge). Changes saved here are separate from App Storage.</li>
@@ -187,7 +215,32 @@
             console.warn("File Handling API (launchQueue) not supported.");
         }
     </script>
-     <!-- == END: PWA Launch Queue Handler == -->
+
+    <script>
+        // Add installation functionality to app.js or directly here
+        document.addEventListener('DOMContentLoaded', () => {
+            const installButton = document.getElementById('installButton');
+            if (installButton) {
+                installButton.addEventListener('click', async () => {
+                    if (deferredPrompt) {
+                        // Show the installation prompt
+                        deferredPrompt.prompt();
+                        
+                        // Wait for the user to respond to the prompt
+                        const { outcome } = await deferredPrompt.userChoice;
+                        console.log(`User response to the install prompt: ${outcome}`);
+                        
+                        // Clear the saved prompt - it can't be used again
+                        deferredPrompt = null;
+                        
+                        // Hide the install button
+                        installButton.style.display = 'none';
+                    }
+                });
+            }
+        });
+    </script>
+    <!-- == END: PWA Launch Queue Handler == -->
 
 </body>
 </html>

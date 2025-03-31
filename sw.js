@@ -1,7 +1,7 @@
 // sw.js
 
 // Increment version number when assets change
-const CACHE_NAME = 'bike-editor-pro-cache-v2';
+const CACHE_NAME = 'outlinerider-cache-v2';
 const urlsToCache = [
   '.', // Alias for index.html
   'index.html',

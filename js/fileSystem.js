@@ -1,6 +1,6 @@
 // js/fileSystem.js
 const FileSystem = (() => {
-    const LOCAL_STORAGE_KEY = 'bikeEditorProDraft';
+    const LOCAL_STORAGE_KEY = 'outlineRiderDraft';
     const PERSISTENT_OPFS_FILENAME = '_current_outline.bike';
     const AUTOSAVE_DELAY = 1500; // ms
     const OPFS_AUTOSAVE_DELAY = 5000; // ms - Auto-save to OPFS every 5 seconds
