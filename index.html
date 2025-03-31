@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, viewport-fit=cover">
     <title>Bike Editor Pro</title>
     <link rel="stylesheet" href="style.css">
     <!-- KaTeX for LaTeX rendering -->
@@ -10,25 +10,23 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <!-- Optional: Theme color for PWA -->
-    <meta name="theme-color" content="#e9ecef"/>
+    <meta name="theme-color" content="#4285f4">
     <!-- Optional: iOS specific tags for standalone appearance -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="BikeEditor">
-    <!-- Optional: Link iOS icons if needed -->
-    <!-- <link rel="apple-touch-icon" href="icon-192.png"> -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Bike Editor">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 
     <!-- Add Service Worker registration script -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js') // Path relative to origin
+                navigator.serviceWorker.register('/service-worker.js')
                     .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                        console.log('Service Worker registered:', registration.scope);
                     })
-                    .catch(err => {
-                        console.error('ServiceWorker registration failed: ', err);
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
                     });
             });
         }

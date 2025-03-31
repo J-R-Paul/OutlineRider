@@ -1,23 +1,25 @@
 {
-  "name": "Bike Editor Pro",
-  "short_name": "BikeEditor",
-  "description": "A web-based editor for .bike outline files.",
-  "start_url": ".",
+  "name": "Bike Editor",
+  "short_name": "BikeEdit",
+  "description": "Bike editing application",
+  "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#e9ecef",
+  "background_color": "#ffffff",
+  "theme_color": "#4285f4",
+  "orientation": "any",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-       "purpose": "any maskable"
+      "purpose": "any maskable"
     }
   ],
   "file_handlers": [
@@ -29,5 +31,14 @@
       },
       "launch_type": "single-client"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "description": "Bike Editor main interface"
+    }
+  ],
+  "prefer_related_applications": false
 }
