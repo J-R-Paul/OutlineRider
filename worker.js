@@ -72,7 +72,11 @@ self.onmessage = async (event) => {
 
             console.log(`Worker: ---- Successfully completed saveOpfs for ${fileName} ----`);
             // Send success message back
-            self.postMessage({ success: true, fileName: fileName });
+            self.postMessage({
+                action: 'saveOpfs',  // Include the action in response
+                success: true,
+                fileName: fileName
+            });
 
         } catch (error) {
             console.error(`Worker: !!!! Error during saveOpfs for ${fileName}: !!!!`, error);
