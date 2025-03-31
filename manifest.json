@@ -1,7 +1,7 @@
 {
-  "name": "Bike Editor",
-  "short_name": "BikeEdit",
-  "description": "Bike editing application",
+  "name": "OutlineRider",
+  "short_name": "OutlineRider",
+  "description": "Outline editing application",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
