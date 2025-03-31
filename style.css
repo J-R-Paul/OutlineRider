@@ -503,9 +503,12 @@ a:hover { text-decoration: underline; }
         width: 100%;
         padding: 6px 10px;
         justify-content: center;
-        z-index: 100;
+        z-index: 1000; /* Higher z-index to ensure it stays on top */
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        background-color: rgba(248, 249, 250, 0.98); /* Slightly more opaque */
+        background-color: rgba(248, 249, 250, 0.98); 
+        /* iOS-specific: ensure toolbar stays put */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
     }
     
     /* Add padding to main content to account for fixed toolbar */
@@ -519,6 +522,31 @@ a:hover { text-decoration: underline; }
     body.keyboard-open #toolbar {
         position: fixed;
         top: 0;
+        /* iOS-specific position: prevent toolbar from scrolling with content */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        /* Ensure it's above everything else */
+        z-index: 9999;
+    }
+    
+    /* Add iOS-specific viewport handling */
+    @supports (-webkit-touch-callout: none) {
+        /* iOS-specific styles */
+        #toolbar {
+            /* Ensure toolbar is fixed at top of visual viewport */
+            position: fixed;
+            top: env(safe-area-inset-top, 0);
+            /* Account for notches and home indicators */
+            padding-top: calc(6px + env(safe-area-inset-top, 0));
+            padding-bottom: calc(6px + env(safe-area-inset-bottom, 0));
+        }
+        
+        main#outlineContainer {
+            /* Adjust content top padding to account for the toolbar and safe area */
+            padding-top: calc(38px + 15px + env(safe-area-inset-top, 0));
+            /* Add padding at bottom for home indicator */
+            padding-bottom: calc(15px + env(safe-area-inset-bottom, 0));
+        }
     }
     
     #toolbar button {
@@ -544,11 +572,13 @@ a:hover { text-decoration: underline; }
      #outlineContainer li > p { padding: 1px 4px; min-height: 1.55em; }
 }
 
-/* Remove special styling for keyboard mode (simplified) */
+/* Landscape mode on small devices - compacted toolbar */
 @media (max-height: 450px) and (max-width: 768px) {
     #toolbar {
-        /* Keep compact toolbar for landscape mode */
         padding: 4px 8px;
+        /* Make sure toolbar stays visible in landscape */
+        position: fixed;
+        top: 0;
     }
     
     #toolbar button {
@@ -557,17 +587,15 @@ a:hover { text-decoration: underline; }
     }
 }
 
-/* Remove the keyboard-specific positioning and keep simpler styles */
+/* Keyboard-open specific styles */
 @media (max-width: 768px) {
     body.keyboard-open #toolbar {
-        /* Keep fixed at top when keyboard is open */
         position: fixed;
         top: 0;
     }
     
-    /* Ensure enough space below the fixed toolbar */
     body.keyboard-open main#outlineContainer {
-        padding-top: calc(38px + 15px); /* Toolbar height + original padding */
+        /* No need to change padding when keyboard appears */
     }
 }
 

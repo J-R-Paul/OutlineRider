@@ -168,30 +168,107 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Mobile Keyboard Detection and Toolbar Positioning ---
     function setupViewportHandling() {
-        // We'll keep some detection for visual viewport changes,
-        // but won't reposition the toolbar since it stays at the top
+        // Detect iOS device
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        // Add iOS class to body if on iOS device
+        if (isIOS) {
+            document.body.classList.add('ios-device');
+            // Add viewport meta tag with viewport-fit=cover for iOS notch handling
+            let viewportMeta = document.querySelector('meta[name="viewport"]');
+            if (viewportMeta) {
+                viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover');
+            }
+        }
         
         if ('visualViewport' in window) {
-            console.log('Visual Viewport API detected, setting up keyboard detection');
+            console.log('Visual Viewport API detected, setting up enhanced keyboard detection');
             
-            // Create handler function (simplified)
+            // Create handler function with improved detection
             viewportHandler = () => {
                 // On mobile devices, when keyboard appears, the visual viewport height becomes smaller
                 // than the layout viewport height (window.innerHeight)
                 const viewportHeight = window.visualViewport.height;
                 const windowHeight = window.innerHeight;
                 
-                // If visual viewport is significantly smaller than window height, keyboard is likely visible
+                // More aggressive threshold for keyboard detection
+                // On iOS, keyboards can take up more than half the screen
                 const heightDifference = windowHeight - viewportHeight;
-                const threshold = windowHeight * 0.15; // 15% difference threshold
+                const threshold = isIOS ? Math.min(windowHeight * 0.1, 50) : Math.min(windowHeight * 0.15, 100);
                 
                 const keyboardIsVisible = heightDifference > threshold;
                 
                 if (keyboardIsVisible !== keyboardVisible) {
                     keyboardVisible = keyboardIsVisible;
+                    console.log(`Keyboard visibility changed: ${keyboardIsVisible ? 'visible' : 'hidden'}`);
                     
-                    // Just add or remove the class for styling purposes
                     if (keyboardIsVisible) {
+                        document.body.classList.add('keyboard-open');
+                        
+                        // iOS specific: force toolbar to top of visual viewport
+                        if (isIOS) {
+                            toolbar.style.position = 'fixed';
+                            toolbar.style.top = '0';
+                            toolbar.style.zIndex = '9999';
+                            
+                            // Force redraw to ensure toolbar stays visible
+                            toolbar.style.display = 'none';
+                            toolbar.offsetHeight; // Force reflow
+                            toolbar.style.display = 'flex';
+                        }
+                    } else {
+                        document.body.classList.remove('keyboard-open');
+                        if (isIOS) {
+                            // Reset any direct styles we applied
+                            toolbar.style.position = '';
+                            toolbar.style.top = '';
+                            toolbar.style.zIndex = '';
+                        }
+                    }
+                }
+                
+                // Always update toolbar position for iOS
+                if (isIOS && keyboardVisible) {
+                    toolbar.style.top = window.visualViewport.offsetTop + 'px';
+                }
+            };
+            
+            // Register handler for all relevant events
+            window.visualViewport.addEventListener('resize', viewportHandler);
+            window.visualViewport.addEventListener('scroll', viewportHandler);
+            
+            // iOS specific scroll events
+            if (isIOS) {
+                document.addEventListener('scroll', viewportHandler);
+                window.addEventListener('resize', viewportHandler);
+                window.addEventListener('orientationchange', () => {
+                    // Handle orientation changes with delay to let iOS settle
+                    setTimeout(viewportHandler, 300);
+                });
+            }
+            
+            // Run once on initialization
+            viewportHandler();
+            
+        } else {
+            console.log('Visual Viewport API not supported, using enhanced fallback method');
+            
+            // More aggressive fallback for iOS keyboard detection
+            const detectKeyboard = () => {
+                // On iOS, we'll use a combination of focus events and size changes
+                const isLandscape = window.innerWidth > window.innerHeight;
+                const screenHeight = window.screen.height;
+                const windowHeight = window.innerHeight;
+                
+                // Different thresholds based on orientation
+                const threshold = isLandscape ? 0.1 : 0.25;
+                
+                // If window height is significantly less than screen height, keyboard is likely visible
+                const keyboardLikelyVisible = windowHeight < screenHeight * (1 - threshold);
+                
+                if (keyboardLikelyVisible !== keyboardVisible) {
+                    keyboardVisible = keyboardLikelyVisible;
+                    
+                    if (keyboardLikelyVisible) {
                         document.body.classList.add('keyboard-open');
                     } else {
                         document.body.classList.remove('keyboard-open');
@@ -199,60 +276,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             
-            // Register handler for resize and scroll events on visualViewport
-            window.visualViewport.addEventListener('resize', viewportHandler);
-            window.visualViewport.addEventListener('scroll', viewportHandler);
-            
-            // Run once on initialization
-            viewportHandler();
-        } else {
-            console.log('Visual Viewport API not supported, using fallback method');
-            // Fallback for browsers without visualViewport API
             document.body.addEventListener('focusin', event => {
                 if (event.target.isContentEditable || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
                     document.body.classList.add('keyboard-open');
+                    keyboardVisible = true;
+                    
+                    // iOS-specific: force reposition toolbar
+                    if (isIOS) {
+                        setTimeout(() => {
+                            toolbar.style.position = 'fixed';
+                            toolbar.style.top = '0';
+                            toolbar.style.zIndex = '9999';
+                            // Force scroll to top to ensure toolbar is visible
+                            window.scrollTo(0, 0);
+                        }, 100);
+                    }
                 }
             });
             
             document.body.addEventListener('focusout', event => {
                 if (event.target.isContentEditable || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-                    // Small delay to ensure we're not just focusing on another input
                     setTimeout(() => {
                         const activeElement = document.activeElement;
                         if (!(activeElement.isContentEditable || activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
                             document.body.classList.remove('keyboard-open');
+                            keyboardVisible = false;
+                            
+                            // Reset toolbar position
+                            if (isIOS) {
+                                toolbar.style.position = '';
+                                toolbar.style.top = '';
+                                toolbar.style.zIndex = '';
+                            }
                         }
                     }, 100);
                 }
             });
+            
+            // Also check on resize
+            window.addEventListener('resize', detectKeyboard);
+            window.addEventListener('orientationchange', () => {
+                // Handle orientation changes
+                setTimeout(detectKeyboard, 300);
+            });
+            
+            // Run once on initialization
+            detectKeyboard();
         }
-
-        // Additional detection for iOS Safari keyboard - simplified
-        window.addEventListener('resize', () => {
-            if (window.innerWidth === document.documentElement.clientWidth) {
-                // No change in width but height changed - likely keyboard
-                const heightChanged = window.innerHeight !== document.documentElement.clientHeight;
-                if (heightChanged) {
-                    const keyboardLikelyVisible = window.innerHeight < window.outerHeight * 0.8;
-                    if (keyboardLikelyVisible !== keyboardVisible) {
-                        keyboardVisible = keyboardLikelyVisible;
-                        if (keyboardLikelyVisible) {
-                            document.body.classList.add('keyboard-open');
-                        } else {
-                            document.body.classList.remove('keyboard-open');
-                        }
-                    }
-                }
-            }
-        });
     }
 
-    // Add cleanup function (simplified)
     function cleanupViewportHandling() {
         if (viewportHandler && 'visualViewport' in window) {
             window.visualViewport.removeEventListener('resize', viewportHandler);
             window.visualViewport.removeEventListener('scroll', viewportHandler);
+            
+            // Clean up iOS-specific handlers
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                document.removeEventListener('scroll', viewportHandler);
+                window.removeEventListener('resize', viewportHandler);
+            }
+            
             viewportHandler = null;
+        }
+        
+        // Reset toolbar styles
+        if (toolbar) {
+            toolbar.style.position = '';
+            toolbar.style.top = '';
+            toolbar.style.zIndex = '';
         }
     }
 
@@ -1297,8 +1389,7 @@ document.addEventListener('DOMContentLoaded', () => {
              case 'highlight': wrapSelection('mark'); break;
              case 'code': wrapSelection('code'); break;
              case 'bold': case 'italic': document.execCommand(command, false, null); break;
-             default: console.warn("Unknown format command:", command); return;
-         }
+             default: console.warn("Unknown format command:", command); return; }
           targetP.focus(); handleContentChange();
     }
 
@@ -1900,7 +1991,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateUniqueId(length = 4) {
         const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
         let id='', attempts=0; const maxAttempts = 100;
-        do { id = chars.charAt(Math.floor(Math.random()*chars.length)); for(let i=1; i<length; i++) id += (chars+'0123456789').charAt(Math.floor(Math.random()*(chars.length+10))); attempts++; } while(document.getElementById(id) && attempts < maxAttempts);
+        do { id = chars.charAt(Math.floor(Math.random()*chars.length)); for(let i=1; i<length; i++) id += (chars+'0123456789').charAt(Math.floor(Math.random()*(chars.length+10))); attempts++; } while(document.getElementById(id) && attempts <maxAttempts);
         if(attempts >= maxAttempts) { console.warn("Could not generate unique ID, using fallback."); return `gen_${Date.now()}_${Math.random().toString(36).substring(2,7)}`; }
         return id;
     }
