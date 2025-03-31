@@ -50,14 +50,18 @@ const Mobile = (() => {
                     // The toolbar is now positioned at the bottom, so we need to adjust it
                     // when the keyboard appears to ensure it remains visible above the keyboard
                     const toolbar = UI.elements.toolbar;
-                    if (toolbar) {
-                        if (keyboardVisible) {
-                            // No need to adjust styles specifically since we've positioned
-                            // it at the bottom in CSS and made it fixed
-                            // Just ensure it's visible and above the keyboard with its current position
-                        } else {
-                            // Reset any styles if needed when keyboard hides
-                        }
+                    if (toolbar && keyboardVisible) {
+                        // Set initial position when keyboard opens
+                        requestAnimationFrame(() => {
+                            // Give browser time to layout
+                            if (document.body.classList.contains('keyboard-open')) {
+                                // Make sure focused element is visible
+                                const focusedEl = document.activeElement;
+                                if (focusedEl && (focusedEl.isContentEditable || ['INPUT', 'TEXTAREA'].includes(focusedEl.tagName))) {
+                                    focusedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                            }
+                        });
                     }
                 }
              };
