@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Update viewport meta to better handle iOS keyboard -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Bike Editor Pro</title>
     <link rel="stylesheet" href="style.css">
@@ -19,6 +18,21 @@
     <meta name="apple-mobile-web-app-title" content="BikeEditor">
     <!-- Optional: Link iOS icons if needed -->
     <!-- <link rel="apple-touch-icon" href="icon-192.png"> -->
+
+    <!-- Add Service Worker registration script -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js') // Path relative to origin
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.error('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
 
 </head>
 <body>
@@ -51,21 +65,18 @@
                                aria-label="Load Bike File (Creates Copy)">
                     </label>
                      <button id="saveAsButton" title="Download the current content as a .bike file">Save As / Download</button>
-                     <!-- Removed Clear Temp Draft Button -->
                 </div>
             </div>
         </header>
 
-        <!-- Toolbar moved back to original position -->
         <div id="toolbar">
-            <!-- Formatting Buttons -->
+            <!-- Toolbar buttons remain the same -->
             <button class="format-button" data-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
             <button class="format-button" data-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
             <button class="format-button" data-command="code" title="Code">{}</button>
             <button class="format-button" data-command="highlight" title="Highlight">H</button>
             <button id="linkButton" title="Create Link (Ctrl+K)">Link</button>
             <hr>
-            <!-- Item Type Buttons -->
             <button class="type-button" data-type="heading" title="Heading">H</button>
             <button class="type-button" data-type="note" title="Note">N</button>
             <button class="type-button" data-type="task" title="Task">T</button>
@@ -73,19 +84,18 @@
             <button class="type-button" data-type="unordered" title="Unordered List Item">•</button>
             <button class="type-button" data-type="hr" title="Horizontal Rule">—</button>
             <button class="type-button" data-type="latex" title="LaTeX Math Block">∑</button>
-            <button class="type-button" data-type="" title="Plain Text">P</button> <!-- Empty data-type for default -->
+            <button class="type-button" data-type="" title="Plain Text">P</button>
             <hr>
-            <!-- Outline Operation Buttons -->
             <button id="indentButton" title="Indent (Tab)">→</button>
             <button id="outdentButton" title="Outdent (Shift+Tab)">←</button>
             <button id="moveUpButton" title="Move Up (Alt+Shift+Up)">↑</button>
             <button id="moveDownButton" title="Move Down (Alt+Shift+Down)">↓</button>
             <button id="deleteButton" title="Delete Item (Del/Backspace on empty)">✕</button>
-            <!-- Add fold/unfold all button? Maybe later -->
         </div>
 
         <main id="outlineContainer" tabindex="0">
             <div id="initialMessage">
+                <!-- Initial message content remains the same -->
                 <p>Welcome to Bike Editor Pro!</p>
                 <p>Choose how to start:</p>
                 <ul>
@@ -100,9 +110,86 @@
         </main>
     </div>
 
-    <!-- Worker script -->
+    <!-- Worker script (Path is correct if worker.js is in root) -->
     <script src="worker.js" defer></script>
-    <!-- Main script -->
-    <script src="script.js" defer></script>
+
+    <!-- == START: NEW SCRIPT LOADING ORDER == -->
+    <script src="js/utils.js" defer></script>
+    <script src="js/state.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <script src="js/latex.js" defer></script>
+    <script src="js/editor.js" defer></script>
+    <script src="js/fileSystem.js" defer></script>
+    <script src="js/keyboard.js" defer></script>
+    <script src="js/mobile.js" defer></script>
+    <script src="app.js" defer></script> <!-- Main entry point LAST -->
+    <!-- == END: NEW SCRIPT LOADING ORDER == -->
+
+    <!-- == START: PWA Launch Queue Handler == -->
+    <script>
+        // Handles files opened via PWA file_handlers
+        if ('launchQueue' in window) {
+            console.log("File Handling API supported.");
+
+            launchQueue.setConsumer(async (launchParams) => {
+                if (!launchParams || !launchParams.files || launchParams.files.length === 0) {
+                    console.log("Launch Queue consumed, but no files found.");
+                    return;
+                }
+                console.log(`Launch Queue consumed with ${launchParams.files.length} file(s).`);
+
+                // Process the first file handle provided
+                const fileHandle = launchParams.files[0];
+                console.log("Handling launch file:", fileHandle.name);
+
+                // Wait for the main app modules to be ready (simple check for a key module)
+                // A more robust solution might use custom events or promises.
+                const waitForAppReady = async (maxWait = 5000) => {
+                    const startTime = Date.now();
+                    while (!window.FileSystem || !window.State || !window.Editor || !window.UI) {
+                        if (Date.now() - startTime > maxWait) {
+                            throw new Error("App modules did not initialize in time.");
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+                    }
+                    console.log("App modules appear ready for launch file.");
+                };
+
+                try {
+                    await waitForAppReady();
+
+                    // Check for unsaved changes before loading
+                    if (!await FileSystem.checkUnsavedChanges(`load the opened file '${fileHandle.name}'`)) {
+                         console.log("Launch file loading cancelled due to unsaved changes.");
+                         return;
+                    }
+
+                    const file = await fileHandle.getFile();
+
+                    // Since this comes from file_handlers, treat it like a direct open
+                    State.setDirectFileHandle(fileHandle);
+                    State.setPersistentOpfsHandle(null); // Clear OPFS target
+
+                    const displayName = FileSystem.fixFileName(fileHandle.name).replace(/\.(xhtml)$/i, '.bike');
+                    // Use the FileSystem module's load function (it handles state and UI)
+                    await FileSystem.loadFileContent(file, displayName, 'direct');
+
+                    console.log("Successfully loaded file from launch queue:", fileHandle.name);
+
+                } catch (error) {
+                    console.error("Error handling launch file:", error);
+                    alert(`Could not open the file '${fileHandle.name}'.\n\n${error.message}`);
+                    if (window.FileSystem && window.State && window.UI) {
+                         FileSystem.resetEditorState('empty'); // Attempt to reset if modules loaded
+                         UI.updateFileStateUI();
+                    }
+                }
+            });
+        } else {
+            console.warn("File Handling API (launchQueue) not supported.");
+        }
+    </script>
+     <!-- == END: PWA Launch Queue Handler == -->
+
 </body>
 </html>

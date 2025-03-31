@@ -1,44 +1,33 @@
 {
-    "name": "Bike Editor Pro",
-    "short_name": "BikeEditor",
-    "description": "A web-based editor for .bike outline files.",
-    "start_url": ".",
-    "display": "standalone",
-    "background_color": "#f8f9fa",
-    "theme_color": "#e9ecef",
-    "icons": [
-      {
-        "src": "icon-192.png",
-        "sizes": "192x192",
-        "type": "image/png",
-        "purpose": "any maskable"
-      },
-      {
-        "src": "icon-512.png",
-        "sizes": "512x512",
-        "type": "image/png",
-         "purpose": "any maskable"
-      }
-    ],
-    "share_target": {
-        "action": "/handle-shared-file",
-        "method": "POST",
-        "enctype": "multipart/form-data",
-        "params": {
-            "files": [
-            {
-                "name": "bikeFile",
-                "accept": [".bike", ".xhtml", "application/xhtml+xml"]
-            }
-            ]
-        }
+  "name": "Bike Editor Pro",
+  "short_name": "BikeEditor",
+  "description": "A web-based editor for .bike outline files.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#e9ecef",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
     },
-    "file_handlers": [
-      {
-        "action": "/",
-        "accept": {
-          "application/xhtml+xml": [".bike", ".xhtml"]
-        }
-      }
-    ]
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+       "purpose": "any maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/xhtml+xml": [".bike", ".xhtml"],
+        "text/xml": [".bike", ".xhtml"]
+      },
+      "launch_type": "single-client"
+    }
+  ]
 }
