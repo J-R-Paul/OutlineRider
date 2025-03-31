@@ -495,33 +495,35 @@ a:hover { text-decoration: underline; }
     }
 
     #toolbar {
-        /* Change to fixed positioning for mobile */
+        /* Position at BOTTOM of screen instead of top */
         position: fixed;
-        top: 0;
+        bottom: 0;
         left: 0;
         right: 0;
         width: 100%;
-        padding: 6px 10px;
+        padding: 8px 10px;
         justify-content: center;
-        z-index: 1000; /* Higher z-index to ensure it stays on top */
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        background-color: rgba(248, 249, 250, 0.98); 
+        z-index: 1000;
+        box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.08); /* Shadow from top instead of bottom */
+        background-color: rgba(248, 249, 250, 0.98);
         /* iOS-specific: ensure toolbar stays put */
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
+        /* Add border on top for visual separation */
+        border-top: 1px solid #dee2e6;
     }
     
-    /* Add padding to main content to account for fixed toolbar */
+    /* Add padding to main content to account for fixed toolbar at BOTTOM */
     main#outlineContainer {
-        padding-top: calc(38px + 15px); /* Toolbar height + original padding */
-        /* Keep bottom padding */
-        padding-bottom: 15px;
+        padding-top: 15px; /* Reset to normal padding at top */
+        /* Add padding at bottom to account for toolbar */
+        padding-bottom: calc(38px + 15px); /* Toolbar height + original padding */
     }
 
-    /* When keyboard is visible, ensure toolbar stays at top */
+    /* When keyboard is visible, ensure toolbar stays above the keyboard */
     body.keyboard-open #toolbar {
         position: fixed;
-        top: 0;
+        bottom: 0; /* Keep at bottom, virtual keyboard will appear below it */
         /* iOS-specific position: prevent toolbar from scrolling with content */
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
@@ -533,19 +535,18 @@ a:hover { text-decoration: underline; }
     @supports (-webkit-touch-callout: none) {
         /* iOS-specific styles */
         #toolbar {
-            /* Ensure toolbar is fixed at top of visual viewport */
-            position: fixed;
-            top: env(safe-area-inset-top, 0);
+            /* Ensure toolbar is fixed at bottom of visual viewport */
+            bottom: env(safe-area-inset-bottom, 0);
             /* Account for notches and home indicators */
-            padding-top: calc(6px + env(safe-area-inset-top, 0));
             padding-bottom: calc(6px + env(safe-area-inset-bottom, 0));
+            padding-top: 6px;
         }
         
         main#outlineContainer {
-            /* Adjust content top padding to account for the toolbar and safe area */
-            padding-top: calc(38px + 15px + env(safe-area-inset-top, 0));
-            /* Add padding at bottom for home indicator */
-            padding-bottom: calc(15px + env(safe-area-inset-bottom, 0));
+            /* Normal top padding */
+            padding-top: calc(15px + env(safe-area-inset-top, 0));
+            /* Adjust content bottom padding to account for the toolbar and safe area */
+            padding-bottom: calc(38px + 15px + env(safe-area-inset-bottom, 0));
         }
     }
     
@@ -576,9 +577,9 @@ a:hover { text-decoration: underline; }
 @media (max-height: 450px) and (max-width: 768px) {
     #toolbar {
         padding: 4px 8px;
-        /* Make sure toolbar stays visible in landscape */
+        /* Keep at bottom in landscape mode */
         position: fixed;
-        top: 0;
+        bottom: 0;
     }
     
     #toolbar button {
@@ -591,7 +592,7 @@ a:hover { text-decoration: underline; }
 @media (max-width: 768px) {
     body.keyboard-open #toolbar {
         position: fixed;
-        top: 0;
+        bottom: 0; /* Keep at bottom when keyboard is open */
     }
     
     body.keyboard-open main#outlineContainer {
@@ -611,7 +612,7 @@ a:hover { text-decoration: underline; }
 
     /* Make sure we adjust padding for smaller screens too */
     main#outlineContainer {
-        padding-top: calc(32px + 10px); /* Smaller toolbar + smaller padding */
-        padding-bottom: 15px;
+        padding-top: 15px; /* Normal padding at top */
+        padding-bottom: calc(32px + 10px); /* Smaller toolbar + smaller padding */
     }
 }

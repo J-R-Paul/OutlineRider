@@ -46,55 +46,33 @@ const Mobile = (() => {
                     console.log(`Keyboard state changed: ${keyboardVisible ? 'Visible' : 'Hidden'}`);
                     document.body.classList.toggle('keyboard-open', keyboardVisible);
 
-                    // --- Toolbar Positioning (iOS specific fix attempt) ---
-                    // On iOS, when keyboard appears, fix toolbar to top of visual viewport
-                     const toolbar = UI.elements.toolbar; // Get toolbar ref from UI module
-                     if (isIOS && toolbar) {
-                         if (keyboardVisible) {
-                             toolbar.style.position = 'fixed'; // Fix position
-                             toolbar.style.bottom = 'auto'; // Remove potential bottom styling
-                             toolbar.style.top = `${vv.offsetTop}px`; // Align with top of visual viewport
-                             toolbar.style.width = `${vv.width}px`; // Match visual viewport width
-                             toolbar.style.left = `${vv.offsetLeft}px`; // Align left edge
-                             toolbar.style.zIndex = '9999';
-
-                              // Force redraw/reflow - might help Safari rendering glitches
-                              toolbar.style.display = 'none';
-                              toolbar.offsetHeight; // Trigger reflow
-                              toolbar.style.display = ''; // Restore display
-
-                         } else {
-                             // Reset styles when keyboard hides
-                             toolbar.style.position = '';
-                             toolbar.style.top = '';
-                             toolbar.style.width = '';
-                             toolbar.style.left = '';
-                             toolbar.style.zIndex = '';
-                         }
-                     }
+                    // --- Bottom Toolbar Positioning (for mobile) ---
+                    // The toolbar is now positioned at the bottom, so we need to adjust it
+                    // when the keyboard appears to ensure it remains visible above the keyboard
+                    const toolbar = UI.elements.toolbar;
+                    if (toolbar) {
+                        if (keyboardVisible) {
+                            // No need to adjust styles specifically since we've positioned
+                            // it at the bottom in CSS and made it fixed
+                            // Just ensure it's visible and above the keyboard with its current position
+                        } else {
+                            // Reset any styles if needed when keyboard hides
+                        }
+                    }
                 }
-
-                 // Continuous update for iOS toolbar position while keyboard is visible
-                 if (isIOS && keyboardVisible && UI.elements.toolbar) {
-                    UI.elements.toolbar.style.top = `${vv.offsetTop}px`;
-                    UI.elements.toolbar.style.left = `${vv.offsetLeft}px`;
-                    UI.elements.toolbar.style.width = `${vv.width}px`;
-                 }
              };
 
              window.visualViewport.addEventListener('resize', viewportHandler);
-             window.visualViewport.addEventListener('scroll', viewportHandler); // Needed for position updates
+             window.visualViewport.addEventListener('scroll', viewportHandler);
              // Initial check
              viewportHandler();
 
         } else {
             console.warn('Visual Viewport API not available, using fallback keyboard detection (less reliable).');
             // Fallback: Use focusin/focusout and window resize (less accurate)
-            // This fallback is less reliable for detecting keyboard *hiding* without user interaction.
             document.body.addEventListener('focusin', handleFocusInFallback);
             document.body.addEventListener('focusout', handleFocusOutFallback);
-            // Basic resize check might sometimes correlate with keyboard
-             window.addEventListener('resize', handleResizeFallback);
+            window.addEventListener('resize', handleResizeFallback);
         }
     };
 
@@ -105,7 +83,6 @@ const Mobile = (() => {
                 keyboardVisible = true;
                 document.body.classList.add('keyboard-open');
                 console.log("Keyboard likely visible (focusin fallback).");
-                // Add iOS toolbar fix attempt for fallback too? Less reliable positioning.
              }
         }
     };
@@ -119,12 +96,6 @@ const Mobile = (() => {
                      keyboardVisible = false;
                      document.body.classList.remove('keyboard-open');
                      console.log("Keyboard likely hidden (focusout fallback).");
-                     // Reset iOS toolbar fix attempt
-                      if (isIOS && UI.elements.toolbar) {
-                          UI.elements.toolbar.style.position = '';
-                          UI.elements.toolbar.style.top = '';
-                          // etc.
-                      }
                   }
              }
         });
@@ -138,7 +109,6 @@ const Mobile = (() => {
              // Basic heuristic: if height significantly decreases, assume keyboard
              // This is very unreliable. VisualViewport API is much preferred.
              console.log("Window resized (fallback check)");
-             // Might try to infer keyboard based on height change, but avoid complex logic here.
          }, 250);
      };
 
@@ -155,13 +125,6 @@ const Mobile = (() => {
         }
          // Reset any potentially stuck styles
          document.body.classList.remove('keyboard-open');
-          if (isIOS && UI.elements.toolbar) {
-              UI.elements.toolbar.style.position = '';
-              UI.elements.toolbar.style.top = '';
-              UI.elements.toolbar.style.width = '';
-              UI.elements.toolbar.style.left = '';
-              UI.elements.toolbar.style.zIndex = '';
-          }
         console.log("Mobile viewport handling cleaned up.");
     };
 
