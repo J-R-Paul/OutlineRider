@@ -377,6 +377,10 @@ const Editor = (() => {
         // Mark state as dirty and trigger autosave
         State.markAsDirty();
         UI.updateFileStateUI(); // Update UI immediately on content change
+        
+        // Call FileSystem's content change handler for OPFS auto-save
+        FileSystem.handleContentChange();
+        
         triggerAutoSaveDraft(); // Save draft shortly after
     };
 

@@ -1,16 +1,19 @@
 // worker.js
 
 self.onmessage = async (event) => {
-    const { action, fileName, content } = event.data;
+    const { action, fileName, content, isBeforeUnload, operationId } = event.data;
 
     if (action === 'saveOpfs') {
         if (!fileName || typeof content === 'undefined') {
              console.error('Worker: Missing fileName or content for saveOpfs.');
-             self.postMessage({ success: false, error: 'Worker: Missing fileName or content.', fileName: fileName });
+             self.postMessage({ success: false, error: 'Worker: Missing fileName or content.', fileName: fileName, operationId });
              return;
         }
-        console.log(`Worker: ---- Starting saveOpfs for ${fileName} ----`);
+        console.log(`Worker: ---- Starting saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''} ----`);
 
+        // If this is a beforeUnload save, we might want to prioritize it
+        const isPrioritySave = isBeforeUnload === true;
+        
         let accessHandle = null;
         let fileHandle = null; // Keep track of the file handle too
         try {
@@ -48,10 +51,20 @@ self.onmessage = async (event) => {
                   console.warn(`Worker: Mismatch between expected write size (${writeSize}) and reported bytes written (${bytesWritten}).`);
              }
 
-            // Persist changes to disk (important!)
-            console.log(`Worker: Flushing changes for ${fileName}...`);
-            accessHandle.flush();
-            console.log(`Worker: Flush command issued for ${fileName}.`);
+            // If this was a beforeUnload save, we should try to flush as aggressively as possible
+            if (isPrioritySave) {
+                console.log(`Worker: Priority flush for beforeUnload save of ${fileName}...`);
+                try {
+                    accessHandle.flush();
+                    console.log(`Worker: Priority flush completed for ${fileName}.`);
+                } catch (flushError) {
+                    console.error(`Worker: Error during priority flush: ${flushError}`);
+                }
+            } else {
+                console.log(`Worker: Standard flushing changes for ${fileName}...`);
+                accessHandle.flush();
+                console.log(`Worker: Flush command issued for ${fileName}.`);
+            }
 
             // Optional: Get file size *after* flush (though may not be guaranteed sync)
             // try {
@@ -70,16 +83,18 @@ self.onmessage = async (event) => {
             accessHandle = null; // Mark as closed
             console.log(`Worker: Access handle for ${fileName} closed.`);
 
-            console.log(`Worker: ---- Successfully completed saveOpfs for ${fileName} ----`);
+            console.log(`Worker: ---- Successfully completed saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''} ----`);
             // Send success message back
             self.postMessage({
                 action: 'saveOpfs',  // Include the action in response
                 success: true,
-                fileName: fileName
+                fileName: fileName,
+                isBeforeUnload: isPrioritySave,
+                operationId // Echo back the operation ID if provided
             });
 
         } catch (error) {
-            console.error(`Worker: !!!! Error during saveOpfs for ${fileName}: !!!!`, error);
+            console.error(`Worker: !!!! Error during saveOpfs for ${fileName} ${isBeforeUnload ? '(beforeUnload)' : ''}: !!!!`, error);
             console.error(`Worker: Error Name: ${error.name}`);
             console.error(`Worker: Error Message: ${error.message}`);
             // Attempt to close handle even on error
@@ -103,10 +118,16 @@ self.onmessage = async (event) => {
             } else if (error.name === 'InvalidStateError') {
                  errorMessage = 'Invalid state, possibly due to rapid operations or closed handle.';
             }
-            self.postMessage({ success: false, error: `Worker error saving ${fileName}: ${errorMessage}`, name: error.name, fileName: fileName });
+            self.postMessage({ 
+                success: false, 
+                error: `Worker error saving ${fileName}: ${errorMessage}`, 
+                name: error.name, 
+                fileName: fileName,
+                operationId // Echo back the operation ID if provided
+            });
         }
     } else {
         console.warn('Worker: Unknown action received:', action);
-        self.postMessage({ success: false, error: `Unknown action: ${action}` });
+        self.postMessage({ success: false, error: `Unknown action: ${action}`, operationId });
     }
 };

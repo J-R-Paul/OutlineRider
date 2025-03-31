@@ -175,6 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clean up mobile handlers
         Mobile.cleanup();
 
+        // Attempt a final sync save if appropriate
+        if (State.getCurrentFileSource() === 'opfs' && State.getIsDirty()) {
+            console.log("Attempting final OPFS save before unload");
+            FileSystem.syncSaveAttempt();
+        }
+
         // Warn user about unsaved changes
         if (State.getIsDirty()) {
             event.preventDefault(); // Standard practice

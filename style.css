@@ -495,58 +495,53 @@ a:hover { text-decoration: underline; }
     }
 
     #toolbar {
-        /* Position at BOTTOM of screen instead of top */
-        position: fixed;
-        bottom: 0;
+        /* Keep toolbar at top position */
+        position: sticky;
+        top: 0;
         left: 0;
         right: 0;
         width: 100%;
-        padding: 8px 10px;
+        padding: 6px 10px;
         justify-content: center;
-        z-index: 1000;
-        box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.08); /* Shadow from top instead of bottom */
+        z-index: 100;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         background-color: rgba(248, 249, 250, 0.98);
         /* iOS-specific: ensure toolbar stays put */
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
-        /* Add border on top for visual separation */
-        border-top: 1px solid #dee2e6;
     }
     
-    /* Add padding to main content to account for fixed toolbar at BOTTOM */
+    /* Add padding to main content to account for sticky toolbar */
     main#outlineContainer {
-        padding-top: 15px; /* Reset to normal padding at top */
-        /* Add padding at bottom to account for toolbar */
-        padding-bottom: calc(38px + 15px); /* Toolbar height + original padding */
+        padding-top: 15px;
+        padding-bottom: 15px;
     }
 
-    /* When keyboard is visible, ensure toolbar stays above the keyboard */
+    /* When keyboard is visible, ensure content is properly positioned */
     body.keyboard-open #toolbar {
-        position: fixed;
-        bottom: 0; /* Keep at bottom, virtual keyboard will appear below it */
-        /* iOS-specific position: prevent toolbar from scrolling with content */
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
+        position: sticky;
+        top: 0;
         /* Ensure it's above everything else */
         z-index: 9999;
     }
     
-    /* Add iOS-specific viewport handling */
+    body.keyboard-open main#outlineContainer {
+        /* No special padding needed since toolbar is in normal flow */
+    }
+    
+    /* iOS-specific viewport handling */
     @supports (-webkit-touch-callout: none) {
         /* iOS-specific styles */
         #toolbar {
-            /* Ensure toolbar is fixed at bottom of visual viewport */
-            bottom: env(safe-area-inset-bottom, 0);
-            /* Account for notches and home indicators */
-            padding-bottom: calc(6px + env(safe-area-inset-bottom, 0));
-            padding-top: 6px;
+            /* Account for notches */
+            padding-top: calc(6px + env(safe-area-inset-top, 0));
         }
         
         main#outlineContainer {
-            /* Normal top padding */
+            /* Normal top padding plus safe area */
             padding-top: calc(15px + env(safe-area-inset-top, 0));
-            /* Adjust content bottom padding to account for the toolbar and safe area */
-            padding-bottom: calc(38px + 15px + env(safe-area-inset-bottom, 0));
+            /* Add padding at bottom for home indicator */
+            padding-bottom: calc(15px + env(safe-area-inset-bottom, 0));
         }
     }
     
@@ -577,26 +572,17 @@ a:hover { text-decoration: underline; }
 @media (max-height: 450px) and (max-width: 768px) {
     #toolbar {
         padding: 4px 8px;
-        /* Keep at bottom in landscape mode */
-        position: fixed;
-        bottom: 0;
-    }
-    
-    #toolbar button {
-        min-width: 24px;
-        padding: 2px 4px;
+        /* Keep at top in landscape mode too */
+        position: sticky;
+        top: 0;
     }
 }
 
 /* Keyboard-open specific styles */
 @media (max-width: 768px) {
     body.keyboard-open #toolbar {
-        position: fixed;
-        bottom: 0; /* Keep at bottom when keyboard is open */
-    }
-    
-    body.keyboard-open main#outlineContainer {
-        /* No need to change padding when keyboard appears */
+        position: sticky;
+        top: 0; /* Keep at top when keyboard is open */
     }
 }
 
@@ -610,9 +596,9 @@ a:hover { text-decoration: underline; }
      #outlineContainer li[data-type="ordered"] { padding-left: 24px; }
      #outlineContainer li[data-type="ordered"] > p::before { left: 14px; }
 
-    /* Make sure we adjust padding for smaller screens too */
+    /* Keep normal padding */
     main#outlineContainer {
-        padding-top: 15px; /* Normal padding at top */
-        padding-bottom: calc(32px + 10px); /* Smaller toolbar + smaller padding */
+        padding-top: 15px;
+        padding-bottom: 15px;
     }
 }

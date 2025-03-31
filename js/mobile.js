@@ -46,20 +46,15 @@ const Mobile = (() => {
                     console.log(`Keyboard state changed: ${keyboardVisible ? 'Visible' : 'Hidden'}`);
                     document.body.classList.toggle('keyboard-open', keyboardVisible);
 
-                    // --- Bottom Toolbar Positioning (for mobile) ---
-                    // The toolbar is now positioned at the bottom, so we need to adjust it
-                    // when the keyboard appears to ensure it remains visible above the keyboard
-                    const toolbar = UI.elements.toolbar;
-                    if (toolbar && keyboardVisible) {
-                        // Set initial position when keyboard opens
+                    // When keyboard opens, ensure the focused element is visible
+                    if (keyboardVisible) {
                         requestAnimationFrame(() => {
-                            // Give browser time to layout
-                            if (document.body.classList.contains('keyboard-open')) {
-                                // Make sure focused element is visible
-                                const focusedEl = document.activeElement;
-                                if (focusedEl && (focusedEl.isContentEditable || ['INPUT', 'TEXTAREA'].includes(focusedEl.tagName))) {
+                            const focusedEl = document.activeElement;
+                            if (focusedEl && (focusedEl.isContentEditable || ['INPUT', 'TEXTAREA'].includes(focusedEl.tagName))) {
+                                // Scroll the focused element into view with a slight delay to allow layout to update
+                                setTimeout(() => {
                                     focusedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }
+                                }, 100);
                             }
                         });
                     }

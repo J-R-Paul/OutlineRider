@@ -3,10 +3,12 @@ const FileSystem = (() => {
     const LOCAL_STORAGE_KEY = 'bikeEditorProDraft';
     const PERSISTENT_OPFS_FILENAME = '_current_outline.bike';
     const AUTOSAVE_DELAY = 1500; // ms
+    const OPFS_AUTOSAVE_DELAY = 5000; // ms - Auto-save to OPFS every 5 seconds
 
     let opfsSupported = false;
     let directAccessSupported = false;
     let isInitializing = false; // New flag to track initialization state
+    let opfsAutoSaveTimeout = null; // Track OPFS auto-save timer
 
     // --- Initialization & Feature Detection ---
     const initialize = async () => {
@@ -123,14 +125,12 @@ const FileSystem = (() => {
         console.log(`Resetting editor state. New source: ${newSource}`);
         // Don't manage isLoading here, let callers manage if it's part of an async flow
 
+        // Clear any pending auto-saves
+        clearTimeout(opfsAutoSaveTimeout);
+
         UI.resetEditorUI(newSource); // Update UI part first
         State.setCurrentFileSource(newSource);
         State.setIsDirty(newSource === 'draft' || newSource === 'copy' || newSource === 'new'); // Mark dirty appropriately
-        // State.setDirectFileHandle(null); // Keep handle if resetting to 'copy' from 'direct'? Maybe clear always? Let's clear.
-        // State.setPersistentOpfsHandle(null); // Keep OPFS handle? Yes, unless creating new direct file.
-
-        // Clear auto-save timer associated with previous state
-        // clearTimeout(autoSaveTimeout); // Editor module handles its own timer
 
         UI.updateFileStateUI(); // Update buttons etc. based on new state
         console.log("Editor state reset complete.");
@@ -160,8 +160,6 @@ const FileSystem = (() => {
         console.log(`Loading file from input (as copy): ${file.name}, type: ${file.type}`);
 
         State.setDirectFileHandle(null); // Loading a copy clears direct handle
-        // Keep persistent OPFS handle? Yes, user might want to save the copy there later.
-        // State.setPersistentOpfsHandle(null);
 
         const displayName = fixFileName(file.name).replace(/\.(xhtml)$/i, '.bike'); // Normalize display name if needed
         await loadFileContent(file, displayName, 'copy'); // Manages isLoading internally
@@ -338,7 +336,6 @@ const FileSystem = (() => {
     const verifyPermission = async (fileHandle, readWrite) => {
         if (!fileHandle || !fileHandle.queryPermission || !fileHandle.requestPermission) {
              console.warn("Permission API not fully supported on this handle or browser.");
-             // Assume permission if API is missing? Risky. Let save attempt fail later.
              return true; // Or return false to be safe? Let's be optimistic for now.
          }
         const options = { mode: readWrite ? 'readwrite' : 'read' };
@@ -354,7 +351,6 @@ const FileSystem = (() => {
         } catch (error) {
             console.error("Error verifying/requesting permission:", error);
         }
-        // Denied or error
         return false;
     };
 
@@ -381,10 +377,6 @@ const FileSystem = (() => {
 
         resetEditorState('new'); // Reset state, UI shows 'New App File'
         State.setDirectFileHandle(null); // Clear direct file handle
-        // Keep OPFS root, but clear specific *persistent* file handle if desired?
-        // Let's keep the persistent handle, 'Save to App' will decide to use/overwrite it.
-        // State.setPersistentOpfsHandle(null);
-
 
         const firstLi = Editor.createMinimalStructure(); // Create the basic UL/LI/P
         State.setIsDirty(true); // New file starts dirty
@@ -498,7 +490,6 @@ const FileSystem = (() => {
                 content: htmlContent
             });
 
-            // Important: Update state after successfully posting to worker, not before handle creation
             State.setCurrentFileSource('opfs'); // Now editing the OPFS file
             State.setDirectFileHandle(null); // Clear direct handle if saving to OPFS
 
@@ -520,38 +511,135 @@ const FileSystem = (() => {
             State.setIsLoading(false);
             UI.updateFileStateUI(); // Update UI to reflect error/state change
         }
-        // Note: isLoading and button state are reset in handleWorkerMessage
+    };
+
+    const autoSaveToOpfs = () => {
+        clearTimeout(opfsAutoSaveTimeout); // Clear any pending auto-save
+        
+        // Only proceed if we're not already loading/saving and source is 'opfs'
+        if (State.getIsLoading() || State.getCurrentFileSource() !== 'opfs') return;
+        
+        // Only auto-save if dirty and OPFS is available
+        if (State.getIsDirty() && State.getOpfsRoot() && State.getPersistentOpfsHandle()) {
+            console.log("Auto-saving to OPFS...");
+            quietSaveToOpfs().then(success => {
+                if (success) {
+                    console.log("OPFS auto-save completed successfully");
+                } else {
+                    console.warn("OPFS auto-save failed");
+                }
+            });
+        }
+    };
+
+    const quietSaveToOpfs = async () => {
+        if (!opfsSupported || !State.getOpfsRoot()) return false;
+        const worker = State.getFileSystemWorker();
+        if (!worker) return false;
+        if (State.getIsLoading()) return false;
+
+        const htmlContent = Editor.serializeOutlineToHTML();
+        if (htmlContent === null) return false;
+
+        try {
+            let handle = State.getPersistentOpfsHandle();
+            if (!handle) {
+                handle = await State.getOpfsRoot().getFileHandle(PERSISTENT_OPFS_FILENAME, { create: true });
+                State.setPersistentOpfsHandle(handle);
+            }
+
+            return new Promise((resolve) => {
+                const messageHandler = (event) => {
+                    const { success, fileName, error, action } = event.data;
+                    if ((action === 'saveOpfs' || (!action && fileName === PERSISTENT_OPFS_FILENAME))) {
+                        worker.removeEventListener('message', messageHandler);
+                        
+                        if (success) {
+                            State.markAsClean();
+                            resolve(true);
+                        } else {
+                            console.error(`Quiet OPFS save failed: ${error || 'Unknown error'}`);
+                            resolve(false);
+                        }
+                    }
+                };
+                
+                worker.addEventListener('message', messageHandler);
+                
+                worker.postMessage({
+                    action: 'saveOpfs',
+                    fileName: PERSISTENT_OPFS_FILENAME,
+                    content: htmlContent
+                });
+                
+                setTimeout(() => {
+                    worker.removeEventListener('message', messageHandler);
+                    console.warn("OPFS auto-save timed out");
+                    resolve(false);
+                }, 3000);
+            });
+        } catch (err) {
+            console.error("Error in quiet OPFS save:", err);
+            return false;
+        }
+    };
+
+    const syncSaveAttempt = () => {
+        if (!State.getIsDirty() || !opfsSupported || State.getCurrentFileSource() !== 'opfs') return;
+        
+        try {
+            console.log("Attempting synchronous OPFS save before unload");
+            const htmlContent = Editor.serializeOutlineToHTML();
+            if (htmlContent === null) return;
+            
+            const worker = State.getFileSystemWorker();
+            if (worker) {
+                worker.postMessage({
+                    action: 'saveOpfs',
+                    fileName: PERSISTENT_OPFS_FILENAME,
+                    content: htmlContent,
+                    isBeforeUnload: true
+                });
+                console.log("Final save message sent to worker");
+            }
+        } catch (e) {
+            console.error("Error during sync save attempt:", e);
+        }
+    };
+
+    const handleContentChange = () => {
+        if (State.getIsLoading()) return;
+        
+        if (State.getCurrentFileSource() === 'opfs' && State.getPersistentOpfsHandle()) {
+            clearTimeout(opfsAutoSaveTimeout);
+            opfsAutoSaveTimeout = setTimeout(autoSaveToOpfs, OPFS_AUTOSAVE_DELAY);
+        }
     };
 
     const handleWorkerMessage = (event) => {
         const { success, fileName, error, action } = event.data;
         console.log(`Worker message received: Action=${action}, Success=${success}, File=${fileName || 'N/A'}`);
 
-        // Fix: Check if this is a save OPFS message by fileName even if action is missing
         if ((action === 'saveOpfs' || (!action && fileName === PERSISTENT_OPFS_FILENAME)) && success) {
-            State.setIsLoading(false); // Saving finished
+            State.setIsLoading(false);
             
             if (success) {
                 console.log(`OPFS save successful for: ${fileName}`);
-                State.markAsClean(); // Use markAsClean instead of directly setting isDirty
-                // Show "Saved!" message with timeout like we do for direct save
+                State.markAsClean();
                 UI.setSavingIndicator('saveToOpfsButton', false, 'Saved!');
                 setTimeout(() => {
                     UI.setSavingIndicator('saveToOpfsButton', false);
-                }, 2000); // Keep "Saved!" visible for 2 seconds
+                }, 2000);
             } else {
                 console.error(`OPFS save failed for: ${fileName}`, error);
-                UI.setSavingIndicator('saveToOpfsButton', false); // Just clear the saving indicator on error
+                UI.setSavingIndicator('saveToOpfsButton', false);
                 alert(`Failed to save to App Storage: ${error || 'Unknown error'}`);
             }
-            return; // Handled OPFS save message
+            return;
         }
 
-        // Handle other worker messages or unknown messages
         console.log(`Worker message for other action/file:`, event.data);
         
-        // Safety: If this is an unknown message type but has the OPFS filename,
-        // ensure we're not stuck in loading state
         if (fileName === PERSISTENT_OPFS_FILENAME && State.getIsLoading()) {
             console.warn("Resetting loading state for unhandled OPFS file message");
             State.setIsLoading(false);
@@ -570,7 +658,7 @@ const FileSystem = (() => {
             return;
         }
 
-        State.setIsLoading(true); // Prevent actions during serialization/download prep
+        State.setIsLoading(true);
         UI.updateFileStateUI();
 
         const htmlContent = Editor.serializeOutlineToHTML();
@@ -581,8 +669,7 @@ const FileSystem = (() => {
             return;
         }
 
-        // Determine filename
-        let suggestedName = "outline.bike"; // Default
+        let suggestedName = "outline.bike";
         const source = State.getCurrentFileSource();
         const directHandle = State.getDirectFileHandle();
         const filenameSpan = UI.elements.currentFileNameSpan;
@@ -603,30 +690,26 @@ const FileSystem = (() => {
             }
         }
 
-        suggestedName = fixFileName(suggestedName); // Ensure .bike or .xhtml extension
+        suggestedName = fixFileName(suggestedName);
         console.log(`Saving as: ${suggestedName}`);
 
-        // Determine MIME type based on extension
         const isXHTML = suggestedName.toLowerCase().endsWith('.xhtml');
-        const contentType = 'application/xhtml+xml'; // Use this for both .bike and .xhtml for compatibility
+        const contentType = 'application/xhtml+xml';
 
         const blob = new Blob([htmlContent], { type: contentType });
 
-        // Create download link
         const downloadLink = document.createElement('a');
         downloadLink.href = URL.createObjectURL(blob);
         downloadLink.download = suggestedName;
 
-        // Trigger download
         document.body.appendChild(downloadLink);
         downloadLink.click();
 
-        // Cleanup
         setTimeout(() => {
             document.body.removeChild(downloadLink);
             URL.revokeObjectURL(downloadLink.href);
             console.log(`Download triggered for: ${suggestedName}`);
-            State.setIsLoading(false); // Re-enable actions
+            State.setIsLoading(false);
             UI.updateFileStateUI();
         }, 100);
     };
@@ -634,34 +717,24 @@ const FileSystem = (() => {
     // --- Local Storage Draft ---
 
     const saveDraftToLocalStorage = () => {
-        if (State.getIsLoading()) return; // Don't save draft while other operations are in progress
-        if (!State.getIsDirty()) return; // Don't save if not dirty
+        if (State.getIsLoading()) return;
+        if (!State.getIsDirty()) return;
 
-        // Only save draft if the current source isn't the primary saved source
         const source = State.getCurrentFileSource();
         if (source === 'direct' || source === 'opfs') {
-            // If we are editing a direct/OPFS file but it's dirty,
-            // a draft *could* still be saved as a backup, but the original design
-            // was to clear the draft upon saving the primary file.
-            // Let's stick to saving drafts mainly for 'copy', 'new', 'draft' states.
-             if (source === 'direct' && !State.getDirectFileHandle()) return; // No handle means it's like a copy now
-             if (source === 'opfs' && !State.getPersistentOpfsHandle()) return; // No handle means it's like new/copy
+             if (source === 'direct' && !State.getDirectFileHandle()) return;
+             if (source === 'opfs' && !State.getPersistentOpfsHandle()) return;
 
-             // If handle exists, let's assume user will use Save Direct/Save App
-             // console.log("Skipping draft save for dirty primary source (direct/opfs).");
-             // return;
-             // --- OR --- Allow draft saving even for primary sources as temporary backup:
              console.log(`Saving temporary draft for dirty primary source: ${source}`);
         }
 
         const htmlContent = Editor.serializeOutlineToHTML();
-        if (htmlContent !== null && htmlContent.includes('<li')) { // Basic check for actual content
+        if (htmlContent !== null && htmlContent.includes('<li')) {
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY, htmlContent);
                 console.log("Draft saved to local storage.");
             } catch (e) {
                 console.error("Error saving draft to local storage:", e);
-                // Handle potential storage quota exceeded error
                 if (e.name === 'QuotaExceededError') {
                      alert("Could not save draft: Local storage quota exceeded. Please save your work manually.");
                 }
@@ -670,13 +743,10 @@ const FileSystem = (() => {
              console.warn("Draft save skipped: Serialization failed.");
         } else {
              console.log("Draft save skipped: Outline appears empty.");
-             // Optionally clear draft if outline becomes empty?
-             // localStorage.removeItem(LOCAL_STORAGE_KEY);
         }
     };
 
     const loadFromLocalStorage = async (forcePrompt = false) => {
-        // Allow loading during initialization even if isLoading is true
         if (State.getIsLoading() && !isInitializing) { 
             console.warn("Draft load rejected, already loading."); 
             return false; 
@@ -690,9 +760,7 @@ const FileSystem = (() => {
             return false;
         }
 
-
         let loaded = false;
-        // Basic validation: check if it looks like our outline structure
         if (storedContent && storedContent.includes('<ul') && storedContent.includes('<li')) {
             console.log("Found potentially valid draft in local storage.");
 
@@ -700,28 +768,24 @@ const FileSystem = (() => {
             let loadConfirmed = false;
 
             if (editorIsEmpty) {
-                // If editor is empty, ask to load
                 loadConfirmed = confirm("Load unsaved draft from previous session? (Choosing 'Cancel' will discard the draft)");
             } else if (forcePrompt) {
-                 // If editor has content but prompt is forced (e.g., manual load button if added)
                  loadConfirmed = confirm("Load unsaved draft? This will replace your current content. (Choosing 'Cancel' will discard the draft)");
-            } // Else: editor has content, don't prompt automatically
+            }
 
             if (loadConfirmed) {
-                // Only set isLoading if we're not already initializing
                 if (!isInitializing) {
-                    State.setIsLoading(true); // Set loading flag for this operation
+                    State.setIsLoading(true);
                     UI.updateFileStateUI();
                 }
                 try {
                     console.log("Loading draft.");
-                    resetEditorState('draft'); // Reset state to 'draft'
-                    Editor.parseAndRenderBike(storedContent); // Parse the draft
-                    State.setIsDirty(true); // Draft is inherently unsaved
+                    resetEditorState('draft');
+                    Editor.parseAndRenderBike(storedContent);
+                    State.setIsDirty(true);
                     loaded = true;
-                    localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear draft once loaded successfully
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
                     console.log("Draft loaded and removed from storage.");
-                    // Focus first item
                      if(State.getRootElement()) {
                          const firstLi = State.getRootElement().querySelector('li');
                          if (firstLi) requestAnimationFrame(() => UI.selectAndFocusItem(firstLi, true));
@@ -730,36 +794,31 @@ const FileSystem = (() => {
                  } catch (error) {
                     console.error("Error parsing draft from local storage:", error);
                     alert(`Failed to load draft: ${error.message}\nThe invalid draft will be discarded.`);
-                    localStorage.removeItem(LOCAL_STORAGE_KEY); // Discard invalid draft
-                    resetEditorState('empty'); // Reset to empty on parse error
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                    resetEditorState('empty');
                     loaded = false;
                  } finally {
-                     // Only reset isLoading if we set it (not during initialization)
                      if (!isInitializing) {
-                         State.setIsLoading(false); // Reset loading flag
+                         State.setIsLoading(false);
                          UI.updateFileStateUI();
                      }
                  }
             } else if (editorIsEmpty || forcePrompt) {
-                 // User chose 'Cancel' when prompted
                  console.log("User chose not to load draft. Discarding draft.");
                  localStorage.removeItem(LOCAL_STORAGE_KEY);
-                 // Don't reset state if editor wasn't empty and prompt wasn't forced
-                 if(editorIsEmpty) resetEditorState('empty'); // Ensure empty state if cancelled on empty editor
+                 if(editorIsEmpty) resetEditorState('empty');
                  UI.updateFileStateUI();
             } else {
-                // Editor has content, no prompt shown, draft remains untouched for now.
                 console.log("Editor has content, draft load skipped.");
             }
         } else if (storedContent) {
-             // Content exists but doesn't look valid
              console.warn("Invalid content found in local storage draft key. Discarding.");
              localStorage.removeItem(LOCAL_STORAGE_KEY);
         } else {
             console.log("No draft found in local storage.");
         }
 
-        return loaded; // Return whether a draft was successfully loaded
+        return loaded;
     };
 
     // --- Utility ---
@@ -767,24 +826,18 @@ const FileSystem = (() => {
         if (!name) return `outline${defaultExt}`;
         name = String(name);
 
-        // Basic sanitization
         const invalidChars = /[\\/:*?"<>|]/g;
         name = name.replace(invalidChars, '');
 
-        // iOS likes .xhtml for direct opening in some contexts
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        // Let's generally prefer .bike unless specifically needed otherwise. Keep defaultExt flexible.
         const fileExtension = (isIOS && defaultExt === '.bike') ? '.xhtml' : defaultExt;
 
-        // Remove common outline extensions before adding the desired one
         name = name.replace(/\.(bike|xhtml|html|xml|opml)$/i, '');
 
-        // Add the extension if missing
         if (!name.toLowerCase().endsWith(fileExtension.toLowerCase())) {
             name += fileExtension;
         }
 
-        // Fallback name if empty after cleaning
         if (!name || name === fileExtension) {
             name = `outline${fileExtension}`;
         }
@@ -792,11 +845,10 @@ const FileSystem = (() => {
         return name;
     };
 
-
     // --- Public API ---
     return {
         initialize,
-        resetEditorState, // Expose reset logic
+        resetEditorState, 
         checkUnsavedChanges,
         handleFileLoadFromInput,
         openFileDirectly,
@@ -804,14 +856,17 @@ const FileSystem = (() => {
         createNewAppFile,
         saveToOpfs,
         saveFileAsDownload,
-        saveDraftToLocalStorage, // Called by editor module
-        loadFromLocalStorage, // Called during init
-        fixFileName, // Utility used internally and potentially by UI
-        // Constants used by other modules
+        saveDraftToLocalStorage,
+        loadFromLocalStorage, 
+        fixFileName,
+        autoSaveToOpfs,
+        quietSaveToOpfs,
+        syncSaveAttempt,
+        handleContentChange,
         LOCAL_STORAGE_KEY,
         PERSISTENT_OPFS_FILENAME,
         AUTOSAVE_DELAY,
-        // For debugging purposes, expose the isInitializing state
+        OPFS_AUTOSAVE_DELAY,
         isInitializing: () => isInitializing
     };
 })();
