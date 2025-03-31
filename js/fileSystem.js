@@ -526,7 +526,7 @@ const FileSystem = (() => {
                 if (success) {
                     console.log("OPFS auto-save completed successfully");
                 } else {
-                    console.warn("OPFS auto-save failed");
+                    console.warn("OPFS auto-save failed or timed out");
                 }
             });
         }
@@ -538,6 +538,10 @@ const FileSystem = (() => {
         if (!worker) return false;
         if (State.getIsLoading()) return false;
 
+        // Save focus state before any operations
+        const activeElement = document.activeElement;
+        const selectionInfo = saveSelectionState();
+
         const htmlContent = Editor.serializeOutlineToHTML();
         if (htmlContent === null) return false;
 
@@ -548,11 +552,21 @@ const FileSystem = (() => {
                 State.setPersistentOpfsHandle(handle);
             }
 
+            // Create a unique ID for this save operation
+            const saveOperationId = Date.now().toString();
+
             return new Promise((resolve) => {
                 const messageHandler = (event) => {
-                    const { success, fileName, error, action } = event.data;
-                    if ((action === 'saveOpfs' || (!action && fileName === PERSISTENT_OPFS_FILENAME))) {
+                    const { success, fileName, error, action, operationId } = event.data;
+                    
+                    // Only process message if it's for our specific operation or matches our file
+                    if ((operationId === saveOperationId) || 
+                        ((action === 'saveOpfs' || !action) && fileName === PERSISTENT_OPFS_FILENAME)) {
+                        
                         worker.removeEventListener('message', messageHandler);
+                        
+                        // Always restore focus regardless of save result
+                        restoreFocusAndSelection(activeElement, selectionInfo);
                         
                         if (success) {
                             State.markAsClean();
@@ -569,18 +583,77 @@ const FileSystem = (() => {
                 worker.postMessage({
                     action: 'saveOpfs',
                     fileName: PERSISTENT_OPFS_FILENAME,
-                    content: htmlContent
+                    content: htmlContent,
+                    operationId: saveOperationId // Include the ID to track this specific operation
                 });
                 
+                // Increase timeout to 5 seconds for auto-saves
                 setTimeout(() => {
                     worker.removeEventListener('message', messageHandler);
-                    console.warn("OPFS auto-save timed out");
+                    restoreFocusAndSelection(activeElement, selectionInfo);
                     resolve(false);
-                }, 3000);
+                }, 5000);
             });
         } catch (err) {
             console.error("Error in quiet OPFS save:", err);
+            // Even if there's an error, restore focus
+            restoreFocusAndSelection(activeElement, selectionInfo);
             return false;
+        }
+    };
+
+    // Helper function to save selection/cursor state
+    const saveSelectionState = () => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return null;
+        
+        try {
+            const range = selection.getRangeAt(0);
+            return {
+                startContainer: range.startContainer,
+                startOffset: range.startOffset,
+                endContainer: range.endContainer,
+                endOffset: range.endOffset,
+                collapsed: range.collapsed
+            };
+        } catch (e) {
+            console.warn("Could not save selection state:", e);
+            return null;
+        }
+    };
+
+    // Helper function to restore focus and selection after operations
+    const restoreFocusAndSelection = (activeElement, selectionInfo) => {
+        if (!activeElement || !document.body.contains(activeElement)) return;
+        
+        try {
+            // First restore focus to the element
+            if (activeElement.focus) {
+                activeElement.focus({preventScroll: true}); // Prevent scroll jump
+            }
+            
+            // Then restore the exact cursor position/selection
+            if (selectionInfo && window.getSelection) {
+                const selection = window.getSelection();
+                
+                // Verify all parts of the selection still exist in the DOM
+                if (!document.body.contains(selectionInfo.startContainer) ||
+                    !document.body.contains(selectionInfo.endContainer)) {
+                    return;
+                }
+                
+                try {
+                    const range = document.createRange();
+                    range.setStart(selectionInfo.startContainer, selectionInfo.startOffset);
+                    range.setEnd(selectionInfo.endContainer, selectionInfo.endOffset);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                } catch (e) {
+                    console.warn("Could not restore exact selection:", e);
+                }
+            }
+        } catch (e) {
+            console.error("Error during focus restoration:", e);
         }
     };
 
@@ -617,8 +690,11 @@ const FileSystem = (() => {
     };
 
     const handleWorkerMessage = (event) => {
-        const { success, fileName, error, action } = event.data;
-        console.log(`Worker message received: Action=${action}, Success=${success}, File=${fileName || 'N/A'}`);
+        const { success, fileName, error, action, operationId } = event.data;
+        
+        // Adding a mention of the operationId if present for debugging
+        const opIdMsg = operationId ? `, OperationID=${operationId}` : '';
+        console.log(`Worker message received: Action=${action}, Success=${success}, File=${fileName || 'N/A'}${opIdMsg}`);
 
         if ((action === 'saveOpfs' || (!action && fileName === PERSISTENT_OPFS_FILENAME)) && success) {
             State.setIsLoading(false);
@@ -863,6 +939,8 @@ const FileSystem = (() => {
         quietSaveToOpfs,
         syncSaveAttempt,
         handleContentChange,
+        saveSelectionState,
+        restoreFocusAndSelection,
         LOCAL_STORAGE_KEY,
         PERSISTENT_OPFS_FILENAME,
         AUTOSAVE_DELAY,
