@@ -74,10 +74,6 @@ Select text and use the formatting buttons in the toolbar:
 - **H**: Highlight
 - **Link**: Create a hyperlink
 
-### Multi-selection
-
-- **Select Multiple Items**: Hold Shift and click to select a range
-- **Copy Multiple Items**: Select multiple items, then use Ctrl+C/Cmd+C
 
 ### Mobile Features
 
